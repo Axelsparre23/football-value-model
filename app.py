@@ -16,7 +16,7 @@ from model_research import chronological_ensemble_evaluation
 
 st.set_page_config(page_title="Football Match Calculator", page_icon="⚽", layout="wide")
 st.title("Football Match Calculator")
-st.caption("Premier League · La Liga · Bundesliga · Serie A · Ligue 1 · Allsvenskan")
+st.caption("Select a league and two teams to get a match prediction.")
 
 @st.cache_data(ttl=21600, show_spinner=False)
 def load_league(code):
@@ -50,6 +50,10 @@ teams = sorted(set(recent_teams.HomeTeam) | set(recent_teams.AwayTeam))
 if len(teams) < 2:
     teams = sorted(set(data.HomeTeam) | set(data.AwayTeam))
 st.caption(f"{len(data):,} completed matches · coverage: {first_date.year}–{latest_date.year} · latest result: {latest_date.date()}")
+data_age_days = max(0, (pd.Timestamp.now().normalize() - latest_date.normalize()).days)
+if data_age_days > 21:
+    st.warning(f"Data warning: the latest result is {data_age_days} days old. Treat this as a historical estimate, not a current forecast, until the league data feed is updated.")
+
 
 left, right = st.columns(2)
 with left:
@@ -57,28 +61,28 @@ with left:
 with right:
     away = st.selectbox("Away team", [x for x in teams if x != home], index=0)
 
-st.subheader("Lineups and player availability")
-st.caption("Enter one player per line: Name | rating (1–10) | position. Example: Alex Smith | 7.4 | ST. Ratings and availability are manual inputs, not an automatic feed.")
-l1, l2 = st.columns(2)
-with l1:
-    st.markdown(f"**{home}**")
-    home_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Confirmed"], key="hs")
-    home_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="hf")
-    home_xi_raw = st.text_area("Starting XI — player | rating | position", height=180, key="hxi",
-                               placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
-    home_abs_raw = st.text_area("Unavailable players — player | rating | position", height=110, key="habs",
-                                placeholder="Starting striker | 7.8 | ST")
-with l2:
-    st.markdown(f"**{away}**")
-    away_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Confirmed"], key="as")
-    away_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="af")
-    away_xi_raw = st.text_area("Starting XI — player | rating | position", height=180, key="axi",
-                               placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
-    away_abs_raw = st.text_area("Unavailable players — player | rating | position", height=110, key="aabs",
-                                placeholder="Starting centre-back | 7.5 | CB")
+with st.expander("Optional: lineups and unavailable players", expanded=False):
+    st.caption("Manual inputs only. Enter one player per line: Name | rating (1–10) | position. These estimates are not automatic or verified.")
+    l1, l2 = st.columns(2)
+    with l1:
+        st.markdown(f"**{home}**")
+        home_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Confirmed"], key="hs")
+        home_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="hf")
+        home_xi_raw = st.text_area("Starting XI — player | rating | position", height=120, key="hxi",
+                                   placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
+        home_abs_raw = st.text_area("Unavailable players — player | rating | position", height=80, key="habs",
+                                    placeholder="Starting striker | 7.8 | ST")
+    with l2:
+        st.markdown(f"**{away}**")
+        away_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Confirmed"], key="as")
+        away_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="af")
+        away_xi_raw = st.text_area("Starting XI — player | rating | position", height=120, key="axi",
+                                   placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
+        away_abs_raw = st.text_area("Unavailable players — player | rating | position", height=80, key="aabs",
+                                    placeholder="Starting centre-back | 7.5 | CB")
 
-home_xi, away_xi = parse_player_lines(home_xi_raw), parse_player_lines(away_xi_raw)
-home_abs, away_abs = parse_player_lines(home_abs_raw), parse_player_lines(away_abs_raw)
+home_xi, away_xi = parse_player_lines(home_xi_raw if "home_xi_raw" in locals() else ""), parse_player_lines(away_xi_raw if "away_xi_raw" in locals() else "")
+home_abs, away_abs = parse_player_lines(home_abs_raw if "home_abs_raw" in locals() else ""), parse_player_lines(away_abs_raw if "away_abs_raw" in locals() else "")
 
 def team_snapshot(df, team, n=5):
     rows = df[((df.HomeTeam == team) | (df.AwayTeam == team))].sort_values("Date").tail(n)
@@ -95,7 +99,7 @@ def team_snapshot(df, team, n=5):
 # Use the actual competition season boundary for table position (calendar year in Sweden; July start for the European leagues).
 season_start = pd.Timestamp(year=latest_date.year if league_code == "SWE" or latest_date.month >= 7 else latest_date.year - 1, month=1 if league_code == "SWE" else 7, day=1)
 profile_data = data[data.Date >= season_start].copy()
-with st.expander("Recent form and data-derived team profiles", expanded=True):
+with st.expander("Optional: recent form and team profiles", expanded=False):
     ph, pa = st.columns(2)
     for col, team in [(ph, home), (pa, away)]:
         snap = team_snapshot(data, team, 5)
@@ -122,10 +126,10 @@ with st.expander("Recent form and data-derived team profiles", expanded=True):
                 st.caption(f"Shot volume is {descriptor} the league's available-match average ({league_shots:.1f}).")
             st.caption("Profile describes observed output; it does not claim to identify a coach's exact tactical system.")
 
-with st.expander("Model settings and match context"):
-    elo_weight = st.slider("Elo contribution to final probabilities", 0.0, 0.50, 0.25, 0.05,
-                           help="The remainder comes from the Dixon–Coles goal model. This is a transparent blend, not yet empirically optimised.")
-    kickoff = st.date_input("Expected match date", value=(latest_date + pd.Timedelta(days=1)).date(), min_value=latest_date.date())
+with st.expander("Match date", expanded=False):
+    default_kickoff = max((latest_date + pd.Timedelta(days=1)).date(),
+                          (pd.Timestamp.now().normalize() + pd.Timedelta(days=1)).date())
+    kickoff = st.date_input("Expected match date", value=default_kickoff, min_value=latest_date.date())
 
 if st.button("Calculate match prediction", type="primary", use_container_width=True):
     if home == away:
@@ -138,7 +142,6 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         elo_rows, elo_ratings = get_elo(data)
         elo_diff = elo_ratings.get(home, 1500.0) + 65.0 - elo_ratings.get(away, 1500.0)
         ep = elo_probabilities(elo_diff)
-        combined = blended_probabilities(dc_probs, ep, elo_weight)
 
         h_att, h_def, h_known = player_impact(home_xi)
         a_att, a_def, a_known = player_impact(away_xi)
@@ -160,12 +163,13 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                 matrix[x,y] *= dixon_coles_tau(x,y,adj_hg,adj_ag,model.rho)
         matrix = np.maximum(matrix, 0); matrix /= matrix.sum()
         adjusted_dc = np.array([np.tril(matrix,-1).sum(), np.trace(matrix), np.triu(matrix,1).sum()])
-        final_probs = blended_probabilities(adjusted_dc, ep, elo_weight)
+        # Elo is the current default because it outperformed DC and the blend in the available Allsvenskan holdout. DC remains an independent cross-check pending validation in all leagues.
+        final_probs = ep
         labels = [f"{home} win", "Draw", f"{away} win"]
         best = int(np.argmax(final_probs))
 
         st.divider()
-        st.subheader(f"Most likely outcome: {labels[best]}")
+        st.subheader(f"Elo prediction: {labels[best]}")
         st.markdown(f"### {final_probs[best]:.1%}")
         c1,c2,c3 = st.columns(3)
         c1.metric(labels[0], f"{final_probs[0]:.1%}")
@@ -173,11 +177,11 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         c3.metric(labels[2], f"{final_probs[2]:.1%}")
         st.write(f"Adjusted expected goals: **{home} {adj_hg:.2f} – {adj_ag:.2f} {away}**")
 
-        st.markdown("**Model components**")
+        st.markdown("**Independent model cross-check**")
         m1,m2,m3 = st.columns(3)
-        m1.metric("Dixon–Coles", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
-        m2.metric("Elo baseline", f"{ep[0]:.1%} / {ep[1]:.1%} / {ep[2]:.1%}")
-        m3.metric("Elo difference", f"{elo_diff:+.0f}")
+        m1.metric("Dixon–Coles home / draw / away", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
+        m2.metric("Elo home / draw / away", f"{ep[0]:.1%} / {ep[1]:.1%} / {ep[2]:.1%}")
+        m3.metric("Elo strength difference", f"{elo_diff:+.0f}")
 
         st.markdown("**Player and match impact**")
         st.write(f"{home}: {h_known} rated starters entered; {len(home_abs)} unavailable players entered. {away}: {a_known} rated starters entered; {len(away_abs)} unavailable players entered.")
@@ -187,15 +191,15 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             st.caption(f"{team}: {status} lineup · {formation} · {len(xi)} players entered" + (f" · WARNING: expected 11, received {len(xi)}" if xi and len(xi)!=11 else ""))
 
         st.markdown("**Why the model leans this way**")
-        st.write(f"Dixon–Coles estimates goals from historical attack/defence and home advantage; dynamic Elo contributes {elo_weight:.0%} of the final probability blend.")
+        st.write("The displayed 1X2 probabilities come from dynamic Elo. Dixon–Coles independently estimates expected goals and provides a second probability estimate; it is not blended into the displayed result because it underperformed Elo in the available Allsvenskan holdout.")
         st.write(f"Pre-match Elo: {home} {elo_ratings.get(home,1500.0):.0f} vs {away} {elo_ratings.get(away,1500.0):.0f}, with a 65-point home advantage.")
         st.write(f"Recent form is shown as context, not added again as a separate multiplier. Player ratings and absences alter expected goals only when you enter ratings.")
-        st.caption("Player impact uses a conservative, transparent heuristic (rating relative to 6.5, position-weighted). It is not a measured player-value model. Elo blend and rest effect require out-of-sample calibration.")
+        st.caption("Player ratings, absences and rest-day adjustments are experimental inputs to expected goals only. Their effect on 1X2 probabilities has not been validated.")
         st.caption("Probabilities are estimates, not certainty. A 60% outcome still fails roughly 4 times in 10 under a perfectly calibrated model.")
     except Exception as exc:
         st.error(f"Prediction failed: {exc}")
 
-with st.expander("Historical model evaluation — tune, calibrate, then test"):
+with st.expander("Advanced: historical model evaluation", expanded=False):
     st.write("Uses whole match dates in chronological order: 60% training, 20% validation and 20% final test. The blend weight and calibration temperature are selected on validation data only; the final block is kept separate.")
     if st.button("Run research evaluation"):
         try:
@@ -208,11 +212,11 @@ with st.expander("Historical model evaluation — tune, calibrate, then test"):
                 index=["Dixon–Coles raw", "Elo raw", "Dixon–Coles calibrated", "Elo calibrated", "Tuned DC + Elo", "Tuned + calibrated ensemble"]
             )
             st.dataframe(metrics, use_container_width=True)
-            dc, tuned, calibrated = result["calibrated_dixon_coles"], result["elo_ensemble"], result["calibrated_ensemble"]
-            if calibrated["Log loss"] < dc["Log loss"] and calibrated["Brier"] < dc["Brier"] and calibrated["RPS"] < dc["RPS"]:
-                st.success("The tuned and calibrated ensemble improved all three probability scores on the final test period.")
+            elo_cal, ensemble_cal = result["calibrated_elo"], result["calibrated_ensemble"]
+            if ensemble_cal["Log loss"] < elo_cal["Log loss"] and ensemble_cal["Brier"] < elo_cal["Brier"] and ensemble_cal["RPS"] < elo_cal["RPS"]:
+                st.success("The calibrated ensemble beat calibrated Elo on all three probability scores in this test.")
             else:
-                st.warning("The tuned and calibrated ensemble did not beat Dixon–Coles on every score. Do not assume the added complexity is an improvement.")
+                st.warning("The ensemble did not beat calibrated Elo on all three scores. Elo remains the preferred default for this league until more evidence says otherwise.")
             st.caption("Lower Brier, log loss and RPS are better. Accuracy is secondary. This is a single chronological test, not proof of future performance.")
         except Exception as exc:
             st.error(f"Evaluation failed: {exc}")
