@@ -36,7 +36,7 @@ FEATURES = [
 ]
 MARKET_COLS = ["MarketHome", "MarketDraw", "MarketAway"]
 OUTCOME_MAP = {"Home": 0, "Draw": 1, "Away": 2}
-RIDGE = 1.0
+RIDGE_CANDIDATES = [0.01, 0.1, 1.0, 10.0, 100.0]
 
 
 def metrics(probabilities, outcomes):
@@ -55,7 +55,7 @@ def metrics(probabilities, outcomes):
     }
 
 
-def fit_residual_model(x, market_p, y):
+def fit_residual_model(x, market_p, y, ridge):
     """Fit logits = log(market probability) + learned correction."""
     x = np.asarray(x, dtype=float)
     market_p = np.clip(np.asarray(market_p, dtype=float), 1e-7, 1.0)
@@ -80,10 +80,10 @@ def fit_residual_model(x, market_p, y):
         logits = offset + design @ weights.T
         log_norm = np.logaddexp.reduce(logits, axis=1)
         loss = np.mean(log_norm - logits[np.arange(len(y)), y])
-        penalty = RIDGE * np.sum(weights[:, 1:] ** 2) / (2.0 * len(y))
+        penalty = ridge * np.sum(weights[:, 1:] ** 2) / 2.0
         probs = softmax(logits, axis=1)
         grad = ((probs - np.eye(3)[y]).T @ design) / len(y)
-        grad[:, 1:] += (RIDGE / len(y)) * weights[:, 1:]
+        grad[:, 1:] += ridge * weights[:, 1:]
         return float(loss + penalty), grad.ravel()
 
     result = minimize(
@@ -94,6 +94,26 @@ def fit_residual_model(x, market_p, y):
         raise RuntimeError(f"Residual model fit failed: {result.message}")
     return {"weights": result.x.reshape(3, n_features), "means": means,
             "scales": scales}
+
+
+def choose_ridge(train, validation):
+    """Choose regularisation on the immediately following season, never the test season."""
+    x_fit = train[FEATURES].to_numpy(dtype=float)
+    y_fit = np.where(train.FTHG > train.FTAG, 0,
+                     np.where(train.FTHG == train.FTAG, 1, 2))
+    p_fit = train[MARKET_COLS].to_numpy(dtype=float)
+    x_val = validation[FEATURES].to_numpy(dtype=float)
+    y_val = np.where(validation.FTHG > validation.FTAG, 0,
+                     np.where(validation.FTHG == validation.FTAG, 1, 2))
+    p_val = validation[MARKET_COLS].to_numpy(dtype=float)
+    scores = []
+    for ridge in RIDGE_CANDIDATES:
+        candidate = fit_residual_model(x_fit, p_fit, y_fit, ridge)
+        probabilities = predict_residual_model(candidate, x_val, p_val)
+        loss = -np.mean(np.log(np.clip(probabilities[np.arange(len(y_val)), y_val], 1e-9, 1.0)))
+        scores.append((float(loss), float(ridge)))
+    scores.sort()
+    return scores[0][1], scores[0][0]
 
 
 def predict_residual_model(model, x, market_p):
@@ -160,19 +180,26 @@ def main():
                 print(f"  {year}: skipped (train={len(train)}, test={len(test)})", flush=True)
                 continue
 
-            # Train only on prior matches with usable market odds.
+            # Fit on the first prior season, select regularisation on the second,
+            # then refit on both prior seasons before evaluating the untouched test season.
+            validation_start, _ = season_bounds(code, year - 1)
+            fit_market = train[train.Date < validation_start].dropna(subset=MARKET_COLS)
+            validation_market = train[train.Date >= validation_start].dropna(subset=MARKET_COLS)
             train_market = train.dropna(subset=MARKET_COLS)
             test_market = test.dropna(subset=MARKET_COLS)
-            if len(train_market) < 250 or len(test_market) < 30:
-                print(f"  {year}: market model skipped (train odds={len(train_market)}, "
-                      f"test odds={len(test_market)})", flush=True)
+            if (len(fit_market) < 200 or len(validation_market) < 200
+                    or len(train_market) < 400 or len(test_market) < 30):
+                print(f"  {year}: market model skipped (fit={len(fit_market)}, "
+                      f"validation={len(validation_market)}, train={len(train_market)}, "
+                      f"test={len(test_market)})", flush=True)
                 continue
 
+            selected_ridge, validation_logloss = choose_ridge(fit_market, validation_market)
             x_train = train_market[FEATURES].to_numpy(dtype=float)
             y_train = np.where(train_market.FTHG > train_market.FTAG, 0,
                                np.where(train_market.FTHG == train_market.FTAG, 1, 2))
             market_train = train_market[MARKET_COLS].to_numpy(dtype=float)
-            model = fit_residual_model(x_train, market_train, y_train)
+            model = fit_residual_model(x_train, market_train, y_train, selected_ridge)
 
             x_test = test_market[FEATURES].to_numpy(dtype=float)
             market_test = test_market[MARKET_COLS].to_numpy(dtype=float)
@@ -195,9 +222,12 @@ def main():
                     "EloHome": float(elo_p[0]), "EloDraw": float(elo_p[1]),
                     "EloAway": float(elo_p[2]),
                     "TrainMatches": int(len(train_market)),
+                    "SelectedRidge": float(selected_ridge),
+                    "ValidationLogLoss": float(validation_logloss),
                 })
             print(f"  {year}: train={len(train_market)} odds-covered, "
-                  f"test={len(test_market)} odds-covered; fitted", flush=True)
+                  f"test={len(test_market)} odds-covered; ridge={selected_ridge:g}; "
+                  f"validation logloss={validation_logloss:.4f}", flush=True)
 
     predictions = pd.DataFrame(all_predictions)
     if predictions.empty:
