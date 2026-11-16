@@ -63,19 +63,15 @@ def metrics(probs, actual):
     }
 
 
-def tune_parameters(history, validation):
-    """Choose K/home advantage by validation Brier; history ends before target."""
+def tune_parameters(validation, candidate_lookups):
+    """Choose K/home advantage by validation Brier using precomputed snapshots."""
     validation_keys = [
         key(row.Date, row.HomeTeam, row.AwayTeam)
         for row in validation.itertuples(index=False)
     ]
     actual = outcomes(validation)
-    candidates = [BASELINE] + list(product(K_VALUES, HOME_ADVANTAGES))
-    # Preserve order while removing the baseline duplicate.
-    candidates = list(dict.fromkeys(candidates))
     best = None
-    for k_value, home_advantage in candidates:
-        lookup = snapshots(history, k_value, home_advantage)
+    for (k_value, home_advantage), lookup in candidate_lookups.items():
         diffs = [lookup.get(item) for item in validation_keys]
         valid = np.array([value is not None for value in diffs])
         if valid.sum() < 100:
@@ -102,6 +98,15 @@ def main():
     for league_code, league_name in LEAGUES.items():
         league_data = data[data.League == league_code].copy()
         years = SWEDEN_YEARS if league_code == "SWE" else EUROPE_YEARS
+        candidates = list(dict.fromkeys([BASELINE] + list(product(K_VALUES, HOME_ADVANTAGES))))
+        candidate_lookups = {}
+        print(f"Precomputing {len(candidates)} Elo configurations for {league_name}...", flush=True)
+        for index, (candidate_k, candidate_ha) in enumerate(candidates, start=1):
+            candidate_lookups[(candidate_k, candidate_ha)] = snapshots(
+                league_data, candidate_k, candidate_ha
+            )
+            if index % 5 == 0 or index == len(candidates):
+                print(f"  {index}/{len(candidates)} configurations ready", flush=True)
         for year in years:
             if league_code == "SWE":
                 start = pd.Timestamp(f"{year}-01-01")
@@ -123,13 +128,13 @@ def main():
                       f"(validation={len(validation)}, target={len(target)})")
                 continue
 
-            best_k, best_ha, validation_brier = tune_parameters(history, validation)
+            best_k, best_ha, validation_brier = tune_parameters(validation, candidate_lookups)
 
-            # Rebuild ratings through the target season. Each target snapshot is
-            # still generated before that fixture's result is applied.
-            through_target = league_data[league_data.Date <= end].copy()
-            tuned_lookup = snapshots(through_target, best_k, best_ha)
-            baseline_lookup = snapshots(through_target, *BASELINE)
+            # Reuse full chronological pre-match snapshots. Future results cannot
+            # affect an earlier snapshot because elo_history updates only after
+            # each date block has been scored.
+            tuned_lookup = candidate_lookups[(best_k, best_ha)]
+            baseline_lookup = candidate_lookups[BASELINE]
 
             scored = 0
             for match in target.itertuples(index=False):
