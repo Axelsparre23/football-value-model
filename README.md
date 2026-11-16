@@ -1,27 +1,42 @@
 # Football Match Calculator
 
-A quick Streamlit match predictor for the Premier League, La Liga, Bundesliga, Serie A, Ligue 1 and Allsvenskan. It produces estimated home-win/draw/away-win probabilities and an explanation of the main model inputs.
+A quick Streamlit football match research tool for the Premier League, La Liga, Bundesliga, Serie A, Ligue 1 and Allsvenskan. It estimates home-win/draw/away-win probabilities and explains the main inputs.
+
+## Current model
+
+- **Dixon–Coles:** time-decayed team attack/defence strengths, home advantage and low-score correlation.
+- **Dynamic Elo:** team ratings update chronologically after every completed result. A home-advantage adjustment is included in the pre-match rating difference.
+- **Ensemble:** Dixon–Coles probabilities and Elo baseline probabilities are blended. The Elo share is configurable in the app; the default is 25%. This is a research setting, not an optimised weight.
+- **Player impact:** manually entered starting-XI ratings and unavailable-player ratings adjust expected goals using position weights. The app shows the method and caps adjustments. This is a transparent heuristic, not a validated player-value model.
+- **Team profile:** recent form, rolling-365-day table position, points, goal difference, goals for/against, and available shots / shots-on-target indicators. It describes observed performance and does not claim to infer a coach's exact tactical system.
+- **Match context:** rest days are calculated from each team's latest prior result. A small capped xG adjustment is applied; this needs out-of-sample validation.
+- **Evaluation:** chronological 80/20 holdout comparison of Dixon–Coles and the Elo ensemble using Brier score, log loss and accuracy. The evaluation is per selected league and does not use future results to predict earlier holdout fixtures.
+
+## Player input format
+
+Enter one player per line:
+
+```
+Player name | rating from 1 to 10 | position
+```
+
+Examples: `Alex Smith | 7.6 | ST`, `Jordan Jones | 7.2 | CB`. Positions recognised include GK, CB, LB, RB, DF, DM, CM, AM, LM, RM, LW, RW, ST and FW. Ratings are optional, but a line without a rating does not affect the calculated player impact. Enter unavailable players separately using the same format.
+
+Lineup and absence information is manual. No automatic injury, suspension, confirmed-lineup or player-rating feed is connected. Do not treat an expected lineup as confirmed.
 
 ## Data sources
 
-- [Football-Data.co.uk](https://www.football-data.co.uk/): historical results and odds for the five major European leagues. The loader uses historical match results and retains available match-stat columns.
-- [open-matchday](https://github.com/oladeeayo/open-matchday): daily published current-season CSVs for the five major leagues and Allsvenskan. It combines public feeds including ESPN, fixturedownload, OpenLigaDB, Football-Data.co.uk and Soccerway. It contains results and fixtures broadly, but detailed shots/corners/fouls/cards are only present where the upstream provider supplies them.
-- [Understat](https://understat.com/): a potential xG and shot-level source for the five major leagues. It has no official public developer API, so this app does not scrape it automatically.
-- [API-Football coverage](https://www.api-football.com/coverage): lists Allsvenskan and the five major leagues, but detailed fixture/lineup/player-stat availability varies by league and season. It is a possible optional integration if a free API key and permitted endpoint access are confirmed; it is not silently treated as a free, complete injury feed.
+- [Football-Data.co.uk](https://www.football-data.co.uk/): historical results for the five major European leagues from 2010/11 onward; detailed statistics vary by league and season.
+- [open-matchday](https://github.com/oladeeayo/open-matchday): current-season results and selected match statistics where upstream providers supply them.
+- [Swedish Football Dataset](https://github.com/Mongosaurusrex/swedish-football-dataset): Allsvenskan historical results, 2011–2025 (CC BY 4.0; attribution: Nathan Dygant).
 
-## What the calculator uses
+## Important limitations
 
-- Dixon–Coles goal model with time-decayed historical goals, attack/defence strengths and home advantage.
-- Recent form from each team's last five completed matches (points, goals for and goals against).
-- Available match statistics in the recent-match panel: shots, shots on target, corners and fouls. Missing values are shown as unavailable, not zero.
-- Optional manual player-absence inputs and tactical assumptions. You enter the names/positions and explicitly choose the expected-goal effect; the app does not invent injury news or hidden player weights.
-- A most-likely score derived from the adjusted goal rates.
-
-## Important coverage caveats
-
-Allsvenskan is a calendar-year league. The current open-matchday feed lists Allsvenskan results/fixtures, but its league index does not show the same detailed match-stat coverage as the top five. The model therefore relies on available Allsvenskan results and clearly reports unavailable stats. xG, confirmed lineups, injuries and detailed tactical data are not yet automatically integrated consistently across all six leagues.
-
-The manual injury/tactical sliders are assumptions supplied by the user, not verified facts or empirically calibrated player values. The current model's percentages should be treated as estimates, not established accuracy. It has not yet been validated against a held-out season or bookmaker benchmark for the new six-league data pipeline.
+- There is no consistent free source connected for player-level ratings, injuries, suspensions, confirmed XIs, xG, possession, PPDA or detailed tactical events across all six competitions.
+- The table profile uses a rolling 365-day window as a season-to-date approximation. This is useful for context but is not an official competition table at every point in the season.
+- Elo probabilities, the ensemble weight, player impact coefficients and rest-day adjustment have not yet been optimised through nested chronological validation.
+- A single 80/20 holdout is an initial check, not proof of calibration, future accuracy or profitability. The model must be tested across multiple seasons and compared with a no-vig market benchmark before any edge can be claimed.
+- Historical data coverage and statistics availability differ by league. Missing data is displayed as unavailable, not treated as zero.
 
 ## Run in GitHub Codespaces
 
@@ -31,6 +46,4 @@ python -m pip install -r requirements.txt
 python -m streamlit run app.py
 ```
 
-Data is cached locally in `data/cache/`. The app refreshes the current-season feed on its cache refresh cycle. Respect the source repositories' terms. The open-matchday dataset is published for informational, non-commercial use and requires attribution; its terms and upstream provider terms apply.
-
-This is a statistical research tool only. No bookmaker connections or automated bet placement.
+Data is cached locally in `data/cache/`. Respect source licenses and terms. This is a statistical research tool only; it has no bookmaker connection or bet-placement functionality.
