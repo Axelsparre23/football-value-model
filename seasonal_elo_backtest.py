@@ -114,7 +114,7 @@ def main():
             continue
         print(f"Evaluating {league_name}...", flush=True)
         baseline, _ = elo_history(league)
-        baseline = league[["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"]].merge(
+        baseline = league.merge(
             baseline[["Date", "HomeTeam", "AwayTeam", "EloDiff"]],
             on=["Date", "HomeTeam", "AwayTeam"], validate="one_to_one")
         baseline["Season"] = [season_key(d, code) for d in baseline.Date]
