@@ -131,13 +131,26 @@ def team_profile(data: pd.DataFrame, team: str):
     scored = [float(m.FTHG if m.HomeTeam == team else m.FTAG) for _,m in last10.iterrows()]
     conceded = [float(m.FTAG if m.HomeTeam == team else m.FTHG) for _,m in last10.iterrows()]
     last_date = matches.Date.max() if len(matches) else None
+    shots_against = []
+    sot_against = []
+    for _, m in last10.iterrows():
+        is_home = m.HomeTeam == team
+        shots_against.append(m.get("AS") if is_home else m.get("HS"))
+        sot_against.append(m.get("AST") if is_home else m.get("HST"))
+    shots_against_values = [x for x in shots_against if pd.notna(x)]
+    sot_against_values = [x for x in sot_against if pd.notna(x)]
+    shots_mean = float(np.mean(shot_values)) if shot_values else None
+    sot_mean = float(np.mean(sot_values)) if sot_values else None
+    shots_against_mean = float(np.mean(shots_against_values)) if shots_against_values else None
+    sot_against_mean = float(np.mean(sot_against_values)) if sot_against_values else None
     return {"rank":rank, "played":int(row.P), "points":int(row.Pts), "gd":int(row.GD),
             "points_behind_leader":int(table.iloc[0].Pts-row.Pts),
             "points_above_bottom":int(row.Pts-table.iloc[-1].Pts),
             "gf":float(row.GF), "ga":float(row.GA), "last10_gf":float(np.mean(scored)) if scored else None,
             "last10_ga":float(np.mean(conceded)) if conceded else None,
-            "shots":float(np.mean(shot_values)) if shot_values else None,
-            "sot":float(np.mean(sot_values)) if sot_values else None,
+            "shots":shots_mean, "sot":sot_mean,
+            "shots_against":shots_against_mean, "sot_against":sot_against_mean,
+            "shot_accuracy":(sot_mean / shots_mean) if shots_mean and shots_mean > 0 and sot_mean is not None else None,
             "last_date":last_date, "last10":last10}
 
 def rest_days(data: pd.DataFrame, team: str, kickoff_date):
