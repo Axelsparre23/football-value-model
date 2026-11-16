@@ -193,3 +193,14 @@ python market_calibration_backtest.py
 The experiment compares raw no-vig closing 1X2 probabilities with a calibrated version on identical, unseen fixtures. It fits on the first prior season, selects regularisation on the next prior season, refits on both prior seasons, and tests on the target season. It uses no team features. Results are written to `output/market_calibration_predictions.csv` and `output/market_calibration_summary.csv`.
 
 Calibration is a research experiment only. It is not used by the live calculator unless it demonstrates repeatable out-of-sample improvement.
+
+
+## Bookmaker price-source and margin-removal experiment
+
+Run:
+
+```bash
+python market_price_method_backtest.py
+```
+
+Compares proportional, power, additive and Shin margin removal across average and Bet365 opening/closing prices. It reports source coverage, aggregate results, a common-fixture comparison across all four price sources, and average-closing results by league. This is a market benchmark diagnostic only; it does not change the live calculator.
