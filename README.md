@@ -93,3 +93,22 @@ python multi_season_draw_backtest.py
 - Outputs: `output/multi_season_draw_predictions.csv` and `output/multi_season_draw_summary.csv`.
 
 This is a research experiment only. It does not change the live app model. A calibration should only be considered for production if it improves proper scoring rules consistently across multiple held-out seasons and remains competitive against the market.
+
+
+## League-specific Elo parameter optimisation experiment
+
+Run the walk-forward K-factor and home-advantage experiment with:
+
+```bash
+python league_elo_optimisation.py
+```
+
+- For each league and target season, selects the K-factor and home advantage using only the two immediately preceding seasons.
+- Evaluates the selected parameters on the next season, with strictly pre-match Elo snapshots.
+- Compares optimised Elo with the fixed K=22 / home advantage=65 baseline.
+- Compares both Elo versions with the no-vig market on exactly the same odds-covered fixtures.
+- Reports Brier score, log loss, ranked probability score and accuracy, including league-season results.
+- Tests K values 12, 16, 20, 22, 26, 30 and 34, and home advantages 45, 55, 65, 75 and 85 Elo points.
+- Outputs: `output/league_elo_optimisation_predictions.csv` and `output/league_elo_optimisation_summary.csv`.
+
+This is an experiment only. It does not change the production calculator or its Elo settings. Parameters are selected using historical validation data before each target season; the target season is not used for tuning. A change should only be considered after consistent out-of-sample improvements across leagues and seasons.
