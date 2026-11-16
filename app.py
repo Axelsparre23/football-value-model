@@ -165,6 +165,22 @@ with st.expander("Optional: lineups and unavailable players", expanded=False):
 home_xi, away_xi = parse_player_lines(home_xi_raw if "home_xi_raw" in locals() else ""), parse_player_lines(away_xi_raw if "away_xi_raw" in locals() else "")
 home_abs, away_abs = parse_player_lines(home_abs_raw if "home_abs_raw" in locals() else ""), parse_player_lines(away_abs_raw if "away_abs_raw" in locals() else "")
 
+with st.expander("Optional: bookmaker probability benchmark", expanded=False):
+    st.caption("Enter decimal 1X2 odds to compare the model with a no-margin market estimate. This is a comparison only; market odds are not blended into the prediction.")
+    compare_market = st.checkbox("Enter bookmaker odds", value=False, key="compare_market")
+    if compare_market:
+        oh, od, oa = st.columns(3)
+        with oh:
+            odds_home = st.number_input(f"{home} odds", min_value=1.01, max_value=100.0, value=2.00, step=0.05, key="odds_home")
+        with od:
+            odds_draw = st.number_input("Draw odds", min_value=1.01, max_value=100.0, value=3.50, step=0.05, key="odds_draw")
+        with oa:
+            odds_away = st.number_input(f"{away} odds", min_value=1.01, max_value=100.0, value=3.50, step=0.05, key="odds_away")
+        raw_market = 1.0 / np.array([odds_home, odds_draw, odds_away], dtype=float)
+        market_probs = raw_market / raw_market.sum()
+    else:
+        market_probs = None
+
 def team_snapshot(df, team, n=5):
     rows = df[((df.HomeTeam == team) | (df.AwayTeam == team))].sort_values("Date").tail(n)
     gf, ga, points = [], [], 0
@@ -197,10 +213,14 @@ with st.expander("Optional: recent form and team profiles", expanded=False):
                 st.write("Shots: unavailable in source")
             if prof["sot"] is not None:
                 st.write(f"Shots on target per match, last 10: {prof['sot']:.1f}")
-                if prof["shots"] and prof["shots"] > 0:
-                    st.write(f"Shots-on-target rate: {prof['sot']/prof['shots']:.1%}")
+                if prof["shot_accuracy"] is not None:
+                    st.write(f"Shots-on-target rate: {prof['shot_accuracy']:.1%}")
             else:
                 st.write("Shots on target: unavailable in source")
+            if prof["shots_against"] is not None:
+                st.write(f"Shots conceded per match, last 10: {prof['shots_against']:.1f}")
+            if prof["sot_against"] is not None:
+                st.write(f"Shots on target conceded per match: {prof['sot_against']:.1f}")
             league_shots = profile_data[["HS","AS"]].stack().mean() if {"HS","AS"}.issubset(profile_data.columns) else np.nan
             if prof["shots"] is not None and pd.notna(league_shots):
                 descriptor = "above" if prof["shots"] > league_shots * 1.08 else ("below" if prof["shots"] < league_shots * 0.92 else "around")
@@ -252,9 +272,17 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         c3.metric(labels[2], f"{final_probs[2]:.1%}")
         st.write(f"Adjusted expected goals: **{home} {adj_hg:.2f} – {adj_ag:.2f} {away}**")
 
+        if market_probs is not None:
+            st.markdown("**Bookmaker benchmark (no margin)**")
+            bm1, bm2, bm3 = st.columns(3)
+            bm1.metric(f"{home} market", f"{market_probs[0]:.1%}", f"{(final_probs[0]-market_probs[0])*100:+.1f} pp vs model")
+            bm2.metric("Draw market", f"{market_probs[1]:.1%}", f"{(final_probs[1]-market_probs[1])*100:+.1f} pp vs model")
+            bm3.metric(f"{away} market", f"{market_probs[2]:.1%}", f"{(final_probs[2]-market_probs[2])*100:+.1f} pp vs model")
+            st.caption("Market probabilities are proportional no-vig estimates from the odds you entered. Differences are descriptive, not evidence of value or a profitable edge.")
+
         st.markdown("**Independent model cross-check**")
         m1,m2,m3 = st.columns(3)
-        m1.metric("Dixon–Coles home / draw / away", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
+        m1.metric("Lineup-adjusted DC H / D / A", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
         m2.metric("Elo home / draw / away", f"{ep[0]:.1%} / {ep[1]:.1%} / {ep[2]:.1%}")
         m3.metric("Elo strength difference", f"{elo_diff:+.0f}")
 
@@ -266,10 +294,10 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             st.caption(f"{team}: {status} lineup · {formation} · {len(xi)} players entered" + (f" · WARNING: expected 11, received {len(xi)}" if xi and len(xi)!=11 else ""))
 
         st.markdown("**Why the model leans this way**")
-        st.write("The displayed 1X2 probabilities come from dynamic Elo. Dixon–Coles independently estimates expected goals and provides a second probability estimate; it is not blended into the displayed result because it underperformed Elo in the available Allsvenskan holdout.")
-        st.write(f"Pre-match Elo: {home} {elo_ratings.get(home,1500.0):.0f} vs {away} {elo_ratings.get(away,1500.0):.0f}, with a 65-point home advantage.")
-        st.write(f"Recent form is shown as context, not added again as a separate multiplier. Player ratings and absences alter expected goals only when you enter ratings.")
-        st.caption("Player ratings, absences and rest-day adjustments are experimental inputs to expected goals only. Their effect on 1X2 probabilities has not been validated.")
+        st.write("The main 1X2 forecast remains the independently tested dynamic Elo baseline. The Dixon–Coles figure is a separate goal-model scenario; entered player ratings, absences and rest days change this scenario, not the main Elo probabilities.")
+        st.write(f"Pre-match Elo: {home} {elo_ratings.get(home,1500.0):.0f} vs {away} {elo_ratings.get(away,1500.0):.0f}, including a 65-point home advantage.")
+        st.write(f"Recent form and the last-10-match shot profile provide context. They are not added as unvalidated multipliers to Elo.")
+        st.caption("Player-impact coefficients and rest-day adjustments remain experimental. The lineup-adjusted Dixon–Coles scenario is informative, not a validated replacement forecast.")
         st.caption("Probabilities are estimates, not certainty. A 60% outcome still fails roughly 4 times in 10 under a perfectly calibrated model.")
     except Exception as exc:
         st.error(f"Prediction failed: {exc}")
