@@ -13,6 +13,7 @@ from advanced_model import (
 )
 
 from model_research import chronological_ensemble_evaluation
+from team_news import fetch_fixture_team_news, get_api_football_key
 
 st.set_page_config(page_title="Football Match Calculator", page_icon="⚽", layout="wide")
 st.title("Football Match Calculator")
@@ -60,6 +61,39 @@ with left:
     home = st.selectbox("Home team", teams, index=0)
 with right:
     away = st.selectbox("Away team", [x for x in teams if x != home], index=0)
+
+api_key = get_api_football_key(st)
+with st.expander("Automatic team news (free API-Football)", expanded=False):
+    st.caption("Optional lookup for confirmed starting XIs, season-average player ratings where available, and reported injuries/suspensions.")
+    if not api_key:
+        st.info("Create a free API-Football key, then add API_FOOTBALL_KEY to your Codespaces environment or .streamlit/secrets.toml. Never commit the key to GitHub.")
+        st.markdown("[Create a free API-Football account](https://dashboard.api-football.com/register)")
+    if st.button("Fetch fixture lineups, ratings and absences", key="fetch_team_news", disabled=not bool(api_key)):
+        try:
+            with st.spinner("Looking up the selected fixture..."):
+                news = fetch_fixture_team_news(api_key, league_code, home, away, kickoff)
+            for k in ("hxi","axi","habs","aabs"): st.session_state[k] = ""
+            for k,v in (("hs","Not entered"),("as","Not entered"),("hf","Other / unknown"),("af","Other / unknown")):
+                st.session_state[k]=v
+            for prefix,item in (("h",news["home"]),("a",news["away"])):
+                if item["xi"]:
+                    st.session_state[prefix+"xi"]=item["xi"]
+                    st.session_state[prefix+"s"]="Confirmed"
+                    st.session_state[prefix+"f"]=item["formation"] if item["formation"] in ["4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","4-1-4-1"] else "Other / unknown"
+                st.session_state[prefix+"abs"]=item["abs"]
+            st.session_state["api_news_result"]=news
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Team-news lookup failed: {exc}")
+    if st.session_state.get("api_news_result"):
+        news=st.session_state["api_news_result"]
+        st.write(f"Fixture: **{news['home_name']} vs {news['away_name']}** · {news['kickoff']} · {news['status']}")
+        st.write(f"Confirmed XI returned: {news['home']['count']}/11 home, {news['away']['count']}/11 away.")
+        st.write(f"Reported absences: {len(news['home']['abs'].splitlines())} home, {len(news['away']['abs'].splitlines())} away.")
+        if news["questionable"]: st.warning("Questionable, not treated as confirmed absences: "+"; ".join(news["questionable"]))
+        if not news["home"]["xi"] and not news["away"]["xi"]:
+            st.info("Confirmed lineups are not published yet or are unavailable for this fixture. Enter lineups manually.")
+        st.caption("Ratings are current-season averages where available, not predicted match ratings.")
 
 with st.expander("Optional: lineups and unavailable players", expanded=False):
     st.caption("Manual inputs only. Enter one player per line: Name | rating (1–10) | position. These estimates are not automatic or verified.")
