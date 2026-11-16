@@ -193,21 +193,25 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
     except Exception as exc:
         st.error(f"Prediction failed: {exc}")
 
-with st.expander("Historical model evaluation — chronological 80/20 holdout"):
-    st.write("Fits on the earliest 80% of completed matches and evaluates later matches in date order. No future results are used to predict earlier holdout fixtures.")
-    if st.button("Run holdout evaluation"):
+with st.expander("Historical model evaluation — tune, calibrate, then test"):
+    st.write("Uses whole match dates in chronological order: 60% training, 20% validation and 20% final test. The blend weight and calibration temperature are selected on validation data only; the final block is kept separate.")
+    if st.button("Run research evaluation"):
         try:
-            with st.spinner("Fitting models and scoring the held-out matches..."):
-                result = backtest_80_20(data, DixonColesModel, dixon_coles_tau)
-            st.write(f"Training matches: {result['train_matches']:,} · holdout matches scored: {result['test_matches']:,} · holdout begins: {result['cutoff']}")
-            metrics = pd.DataFrame([result["dixon_coles"], result["elo_ensemble"]], index=["Dixon–Coles", "Elo ensemble"])
+            with st.spinner("Fitting Dixon–Coles, tuning the blend on validation data, and scoring the untouched test period..."):
+                result = chronological_ensemble_evaluation(data, DixonColesModel)
+            st.write(f"Training: {result['train_matches']:,} · validation: {result['validation_matches']:,} · final test: {result['test_matches']:,} · test begins: {result['cutoff']}")
+            st.write(f"Validation-selected Elo weight: **{result['elo_weight']:.1%}** · calibration temperature: **{result['temperature']:.3f}**")
+            metrics = pd.DataFrame(
+                [result["dixon_coles"], result["elo"], result["elo_ensemble"], result["calibrated_ensemble"]],
+                index=["Dixon–Coles", "Elo only", "Tuned DC + Elo", "Tuned + calibrated"]
+            )
             st.dataframe(metrics, use_container_width=True)
-            dc, ens = result["dixon_coles"], result["elo_ensemble"]
-            if ens["Brier"] < dc["Brier"] and ens["Log loss"] < dc["Log loss"]:
-                st.success("The Elo ensemble improved both Brier score and log loss on this holdout.")
+            dc, tuned, calibrated = result["dixon_coles"], result["elo_ensemble"], result["calibrated_ensemble"]
+            if calibrated["Log loss"] < dc["Log loss"] and calibrated["Brier"] < dc["Brier"] and calibrated["RPS"] < dc["RPS"]:
+                st.success("The tuned and calibrated ensemble improved all three probability scores on the final test period.")
             else:
-                st.warning("The Elo ensemble did not improve both scoring metrics on this holdout. Keep the comparison; do not assume the blend is better.")
-            st.caption("Lower Brier and log loss are better. This is one chronological split, not proof of future profitability or calibration.")
+                st.warning("The tuned and calibrated ensemble did not beat Dixon–Coles on every score. Do not assume the added complexity is an improvement.")
+            st.caption("Lower Brier, log loss and RPS are better. Accuracy is secondary. This is a single chronological test, not proof of future performance.")
         except Exception as exc:
             st.error(f"Evaluation failed: {exc}")
 
