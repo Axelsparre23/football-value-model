@@ -171,8 +171,14 @@ def main():
     actual = pred.drop_duplicates(["League", "Season", "Date", "HomeTeam", "AwayTeam"]).Actual.map(OUTCOME_MAP).to_numpy()
     unique = pred.drop_duplicates(["League", "Season", "Date", "HomeTeam", "AwayTeam"])
     # Allsvenskan uses calendar seasons; 2021-2024 are development, 2025 is final holdout.
-    dev_mask = np.where(unique.League.eq("SWE"), unique.Season.astype(int) <= 2024,
-                        unique.Season.str[:4].astype(int) <= 2024)
+    dev_mask = pd.Series(False, index=unique.index)
+    swe_mask = unique.League.eq("SWE")
+    dev_mask.loc[swe_mask] = pd.to_numeric(unique.loc[swe_mask, "Season"], errors="coerce") <= 2024
+    euro_mask = ~swe_mask
+    dev_mask.loc[euro_mask] = pd.to_numeric(
+        unique.loc[euro_mask, "Season"].str[:4], errors="coerce"
+    ) <= 2024
+    dev_mask = dev_mask.fillna(False)
     test_mask = ~dev_mask
     summaries = []
     print("\n=== DEVELOPMENT PERIOD (2021-2024) ===")
