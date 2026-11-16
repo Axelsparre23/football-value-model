@@ -120,12 +120,13 @@ def fetch_fixture_team_news(api_key, league_code, home_team, away_team, match_da
         is_home=t.get("id") is not None and int(t["id"])==int(hid)
         is_away=t.get("id") is not None and int(t["id"])==int(aid)
         if not (is_home or is_away): continue
-        kind=str(p.get("type") or p.get("reason") or "Unavailable")
+        reason=str(p.get("reason") or p.get("type") or "Unavailable")
         if "question" in str(p.get("type","")).lower():
-            questionable.append(f"{t.get('name','')}: {name} ({kind})")
+            questionable.append(f"{t.get('name','')}: {name} ({reason})")
             continue
         rating,pos=(hr if is_home else ar).get(int(pid),(None,"UNK")) if pid is not None else (None,"UNK")
-        value=f"{name} | {rating:.2f}" if rating is not None else f"{name} | "
+        display_name=f"{name} ({reason})" if reason and reason.lower() not in {"missing fixture","unavailable"} else name
+        value=f"{display_name} | {rating:.2f}" if rating is not None else f"{display_name} | "
         (habs if is_home else aabs).append(value+f" | {pos}")
     return {
       "fixture_id":fid,"kickoff":info.get("date",""),
