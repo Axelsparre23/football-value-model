@@ -161,18 +161,10 @@ def paired_cluster_bootstrap(predictions, y, cluster, rng):
                 # Positive gain means the candidate is better than the reference.
                 delta = losses[reference][metric_name] - losses[name][metric_name]
                 observed = float(delta.mean())
-                boot = np.empty(N_BOOT)
-                for start in range(0, N_BOOT, 100):
-                    count = min(100, N_BOOT - start)
-                    chosen = rng.integers(0, n_clusters, size=(count, n_clusters))
-                    sums = np.zeros(count)
-                    counts = np.zeros(count)
-                    for j in range(n_clusters):
-                        idx = cluster_indices[chosen[:, j]]
-                        for b in range(count):
-                            sums[b] += delta[idx[b]].sum()
-                            counts[b] += len(idx[b])
-                    boot[start:start + count] = sums / counts
+                cluster_sums = np.array([delta[idx].sum() for idx in cluster_indices])
+                cluster_counts = np.array([len(idx) for idx in cluster_indices], dtype=float)
+                chosen = rng.integers(0, n_clusters, size=(N_BOOT, n_clusters))
+                boot = cluster_sums[chosen].sum(axis=1) / cluster_counts[chosen].sum(axis=1)
                 rows.append({
                     "Candidate": name, "Reference": reference, "Metric": metric_name,
                     "Gain": observed, "CI95Low": float(np.quantile(boot, 0.025)),
