@@ -9,8 +9,10 @@ from data_manager import download_data, LEAGUES
 from football_value_model_v3 import DixonColesModel, dixon_coles_tau
 from advanced_model import (
     elo_history, elo_probabilities, blended_probabilities, parse_player_lines,
-    player_impact, absence_impact, team_profile, rest_days, backtest_80_20,
+    player_impact, absence_impact, team_profile, rest_days,
 )
+
+from model_research import chronological_ensemble_evaluation
 
 st.set_page_config(page_title="Football Match Calculator", page_icon="⚽", layout="wide")
 st.title("Football Match Calculator")
