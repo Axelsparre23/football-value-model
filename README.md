@@ -219,3 +219,16 @@ This experiment uses additive margin removal and compares average opening odds, 
 Movement deciles are descriptive, not fitted trading signals. The blend is fixed in advance to avoid selecting a weight on the same evaluation sample. Outputs are saved under `output/market_movement_*.csv`.
 
 This is a probability-forecast research diagnostic only. It does not establish that market movement can be predicted in advance or that any betting strategy would be profitable.
+
+
+## Directional market movement experiment
+
+Run after `market_movement_backtest.py`:
+
+```bash
+python market_direction_backtest.py
+```
+
+For home, draw and away probabilities separately, this groups fixtures by signed opening-to-closing probability movement (largest decreases through largest increases). It compares mean opening probability, closing probability and realised outcome frequency, plus binary Brier scores. Results are also broken down by league and season.
+
+The groups are descriptive and use the full historical sample; they are not a fitted or deployable prediction rule. Outputs: `output/market_direction_*.csv`.
