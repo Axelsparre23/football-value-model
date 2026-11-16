@@ -126,6 +126,8 @@ def team_profile(data: pd.DataFrame, team: str):
     conceded = [float(m.FTAG if m.HomeTeam == team else m.FTHG) for _,m in last10.iterrows()]
     last_date = matches.Date.max() if len(matches) else None
     return {"rank":rank, "played":int(row.P), "points":int(row.Pts), "gd":int(row.GD),
+            "points_behind_leader":int(table.iloc[0].Pts-row.Pts),
+            "points_above_bottom":int(row.Pts-table.iloc[-1].Pts),
             "gf":float(row.GF), "ga":float(row.GA), "last10_gf":float(np.mean(scored)) if scored else None,
             "last10_ga":float(np.mean(conceded)) if conceded else None,
             "shots":float(np.mean(shot_values)) if shot_values else None,
