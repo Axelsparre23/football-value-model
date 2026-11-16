@@ -108,7 +108,7 @@ with st.expander("Automatic team news (free API-Football)", expanded=False):
     if st.session_state.get("api_news_result"):
         news=st.session_state["api_news_result"]
         st.write(f"Fixture: **{news['home_name']} vs {news['away_name']}** · {news['kickoff']} · {news['status']}")
-        st.write(f"Confirmed XI returned: {news['home']['count']}/11 home, {news['away']['count']}/11 away.")
+        st.write(f"Starting XI players returned: {news['home']['count']}/11 home, {news['away']['count']}/11 away.")
         st.write(f"Reported absences: {len(news['home']['abs'].splitlines())} home, {len(news['away']['abs'].splitlines())} away.")
         if news["questionable"]: st.warning("Questionable, not treated as confirmed absences: "+"; ".join(news["questionable"]))
         if not news["home"]["xi"] and not news["away"]["xi"]:
