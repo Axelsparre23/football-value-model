@@ -34,8 +34,9 @@ Lineup and absence information is manual. No automatic injury, suspension, confi
 
 - There is no consistent free source connected for player-level ratings, injuries, suspensions, confirmed XIs, xG, possession, PPDA or detailed tactical events across all six competitions.
 - The table profile uses a rolling 365-day window as a season-to-date approximation. This is useful for context but is not an official competition table at every point in the season.
-- Elo probabilities, the ensemble weight, player impact coefficients and rest-day adjustment have not yet been optimised through nested chronological validation.
-- A single 80/20 holdout is an initial check, not proof of calibration, future accuracy or profitability. The model must be tested across multiple seasons and compared with a no-vig market benchmark before any edge can be claimed.
+- Elo's standalone draw mapping, player impact coefficients and rest-day adjustment remain heuristic and are not yet validated as live prediction inputs.
+- The research evaluator now uses whole-date chronological partitions (60% training, 20% validation, 20% final test), selects the Dixon–Coles/Elo blend weight on validation data, fits temperature calibration on validation data, and reports raw and calibrated Brier, log-loss and ranked probability scores on the untouched final block.
+- This is still one chronological split, not repeated multi-season validation. The model must be tested across several seasons and compared with a no-vig market benchmark before any predictive edge can be claimed.
 - Historical data coverage and statistics availability differ by league. Missing data is displayed as unavailable, not treated as zero.
 
 ## Run in GitHub Codespaces
