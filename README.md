@@ -77,3 +77,19 @@ python -m streamlit run app.py
 ```
 
 Data is cached locally in `data/cache/`. Respect source licenses and terms. This is a statistical research tool only; it has no bookmaker connection or bet-placement functionality.
+
+## Multi-season draw-calibration experiment
+
+Run the repeated walk-forward evaluation with:
+
+```bash
+python multi_season_draw_backtest.py
+```
+
+- European leagues: 2021/22 through 2025/26; Allsvenskan: calendar seasons 2021–2025.
+- For every league-season, both calibration methods are fitted only on matches before that evaluation season.
+- Compares baseline Elo, the existing quadratic draw calibration, a more flexible piecewise-linear draw calibration, and the no-vig closing market where odds exist.
+- Reports Brier score, log loss, ranked probability score and accuracy, including results by league-season and the number of league-seasons where calibration beats baseline Elo.
+- Outputs: `output/multi_season_draw_predictions.csv` and `output/multi_season_draw_summary.csv`.
+
+This is a research experiment only. It does not change the live app model. A calibration should only be considered for production if it improves proper scoring rules consistently across multiple held-out seasons and remains competitive against the market.
