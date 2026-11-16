@@ -62,6 +62,11 @@ with left:
 with right:
     away = st.selectbox("Away team", [x for x in teams if x != home], index=0)
 
+with st.expander("Match date", expanded=False):
+    default_kickoff = max((latest_date + pd.Timedelta(days=1)).date(),
+                          (pd.Timestamp.now().normalize() + pd.Timedelta(days=1)).date())
+    kickoff = st.date_input("Expected match date", value=default_kickoff, min_value=latest_date.date())
+
 api_key = get_api_football_key(st)
 with st.expander("Automatic team news (free API-Football)", expanded=False):
     st.caption("Optional lookup for confirmed starting XIs, season-average player ratings where available, and reported injuries/suspensions.")
@@ -96,7 +101,7 @@ with st.expander("Automatic team news (free API-Football)", expanded=False):
         st.caption("Ratings are current-season averages where available, not predicted match ratings.")
 
 with st.expander("Optional: lineups and unavailable players", expanded=False):
-    st.caption("Manual inputs only. Enter one player per line: Name | rating (1–10) | position. These estimates are not automatic or verified.")
+    st.caption("Manual inputs remain available. Enter one player per line: Name | rating (1–10) | position. Automatic data is only filled when the provider returns it.")
     l1, l2 = st.columns(2)
     with l1:
         st.markdown(f"**{home}**")
