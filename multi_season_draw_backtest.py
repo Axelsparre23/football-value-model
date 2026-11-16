@@ -111,7 +111,11 @@ def score_metrics(probabilities, outcomes):
 
 
 def match_key(match):
-    return (pd.Timestamp(match.Date).normalize(), str(match.HomeTeam), str(match.AwayTeam))
+    if isinstance(match, dict):
+        date, home, away = match["Date"], match["HomeTeam"], match["AwayTeam"]
+    else:
+        date, home, away = match.Date, match.HomeTeam, match.AwayTeam
+    return (pd.Timestamp(date).normalize(), str(home), str(away))
 
 
 def main():
