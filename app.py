@@ -75,7 +75,9 @@ with st.expander("Recent form and team statistics", expanded=True):
             for label, stat in [("Shots", "HS" if team == home else "AS"),
                                 ("Shots on target", "HST" if team == home else "AST"),
                                 ("Corners", "HC" if team == home else "AC"),
-                                ("Fouls", "HF" if team == home else "AF")]:
+                                ("Fouls", "HF" if team == home else "AF"),
+                                ("Yellow cards", "HY" if team == home else "AY"),
+                                ("Red cards", "HR" if team == home else "AR")]:
                 val = available_average(snap["rows"], stat)
                 st.write(f"{label}: {val:.1f}/match" if val is not None else f"{label}: unavailable in source")
 
@@ -137,7 +139,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         st.markdown("**Why the model leans this way**")
         reasons = [
             f"Base expected goals from team attack/defence and home advantage: {home} {base_hg:.2f}, {away} {base_ag:.2f}.",
-            f"Recent form (last five): {home} {h5['points']}/15 points, {away} {a5['points']}/15 points.",
+            f"Recent-form context (last five; not double-counted as a separate model input): {home} {h5['points']}/15 points, {away} {a5['points']}/15 points.",
         ]
         if any([home_attack_absence, home_defence_absence, away_attack_absence, away_defence_absence]) or home_absent_names or away_absent_names:
             reasons.append(f"Unavailable players entered: {home} — {home_absent_names or 'not specified'}; {away} — {away_absent_names or 'not specified'}.")
@@ -159,6 +161,7 @@ with st.expander("Data sources, coverage and limitations"):
         "- **Football-Data.co.uk:** historical results and odds for the five major European leagues.\n"
         "- **open-matchday (GitHub):** current-season results and fixtures for all six competitions; selected match statistics where the upstream provider supplies them.\n"
         "- **Allsvenskan:** currently has results/fixtures coverage in open-matchday, but not the same depth of match statistics as the top five.\n"
+        "- **Shots, shots on target, corners, fouls and cards:** displayed when present in the source; not yet used as independent model predictors.\n"
         "- **Injuries and tactics:** entered manually in this version. The app does not pretend to know unverified team news.\n"
         "- **xG and player-level data:** not yet integrated as a consistent free feed across all six leagues."
     )
