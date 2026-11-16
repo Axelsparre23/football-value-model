@@ -90,8 +90,9 @@ def team_snapshot(df, team, n=5):
     return {"matches":len(rows), "gf":float(np.mean(gf)) if gf else 0.0,
             "ga":float(np.mean(ga)) if ga else 0.0, "points":points, "rows":rows}
 
-# A rolling 365-day window is used as a season-to-date proxy for team profile and table context.
-profile_data = data[data.Date >= latest_date - pd.Timedelta(days=365)].copy()
+# Use the actual competition season boundary for table position (calendar year in Sweden; July start for the European leagues).
+season_start = pd.Timestamp(year=latest_date.year if league_code == "SWE" or latest_date.month >= 7 else latest_date.year - 1, month=1 if league_code == "SWE" else 7, day=1)
+profile_data = data[data.Date >= season_start].copy()
 with st.expander("Recent form and data-derived team profiles", expanded=True):
     ph, pa = st.columns(2)
     for col, team in [(ph, home), (pa, away)]:
@@ -102,7 +103,7 @@ with st.expander("Recent form and data-derived team profiles", expanded=True):
             st.write(f"Rolling-year position: **{prof['rank']}** · {prof['points']} points · GD {prof['gd']:+d}")
             st.write(f"Points behind this table's leader: {prof['points_behind_leader']} · points above bottom: {prof['points_above_bottom']}")
             st.write(f"Last 5: {snap['points']}/15 points · {snap['gf']:.2f} scored and {snap['ga']:.2f} conceded per match")
-            st.write(f"Rolling-year goals: {prof['gf']:.1f} for, {prof['ga']:.1f} against")
+            st.write(f"Season goals: {prof['gf']:.1f} for, {prof['ga']:.1f} against")
             if prof["shots"] is not None:
                 st.write(f"Shots per match, last 10: {prof['shots']:.1f}")
             else:
