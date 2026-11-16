@@ -170,7 +170,7 @@ def main():
             "LogLossImprovement": op["LogLoss"] - cl["LogLoss"],
         })
         print(
-            f"{season:6s} N={len(group):4d} "
+            f"{str(season):6s} N={len(group):4d} "
             f"Brier gain={op['Brier']-cl['Brier']:+.4f} "
             f"LogLoss gain={op['LogLoss']-cl['LogLoss']:+.4f}"
         )
