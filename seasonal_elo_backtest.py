@@ -40,9 +40,6 @@ def seasonal_elo(data, carryover):
     previous_season = None
 
     for (league, season), season_data in ordered.groupby(["League", "_Season"], sort=True):
-        if previous_season is not None:
-            # Each league is processed independently by caller; this guards boundaries.
-            pass
         if rows:
             # Regression toward the league's neutral prior at each new season.
             ratings = {team: INITIAL + carryover * (rating - INITIAL)
@@ -157,8 +154,7 @@ def main():
                         "SeasonalDraw": float(seasonal_probs[i, 1]),
                         "SeasonalAway": float(seasonal_probs[i, 2]),
                     }
-                    if carry == CARRYOVERS[0]:
-                        add_market(row, match)
+                    add_market(row, match)
                     all_predictions.append(row)
 
     pred = pd.DataFrame(all_predictions)
@@ -174,7 +170,6 @@ def main():
 
     actual = pred.drop_duplicates(["League", "Season", "Date", "HomeTeam", "AwayTeam"]).Actual.map(OUTCOME_MAP).to_numpy()
     unique = pred.drop_duplicates(["League", "Season", "Date", "HomeTeam", "AwayTeam"])
-    dev_seasons = unique.Season.str.contains("/") & (unique.Season.str[:4].astype(int) <= 2024)
     # Allsvenskan uses calendar seasons; 2021-2024 are development, 2025 is final holdout.
     dev_mask = np.where(unique.League.eq("SWE"), unique.Season.astype(int) <= 2024,
                         unique.Season.str[:4].astype(int) <= 2024)
