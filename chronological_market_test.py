@@ -136,7 +136,7 @@ def choose_ridge(x_train, y_train, x_val, y_val):
 def paired_cluster_bootstrap(predictions, y, cluster, rng):
     """Paired 95% CIs for model-vs-reference score differences."""
     names = list(predictions)
-    reference = "Closing market"
+    references = ["Closing market", "Elo"]
     rows = []
     unique_clusters = pd.unique(cluster)
     cluster_indices = [np.flatnonzero(cluster == key) for key in unique_clusters]
@@ -153,31 +153,32 @@ def paired_cluster_bootstrap(predictions, y, cluster, rng):
             "logloss": -np.log(p[np.arange(len(y)), y]),
         }
 
-    for name in names:
-        if name == reference:
-            continue
-        for metric_name in ("brier", "logloss"):
-            # Positive gain means the candidate is better than closing market.
-            delta = losses[reference][metric_name] - losses[name][metric_name]
-            observed = float(delta.mean())
-            boot = np.empty(N_BOOT)
-            for start in range(0, N_BOOT, 100):
-                count = min(100, N_BOOT - start)
-                chosen = rng.integers(0, n_clusters, size=(count, n_clusters))
-                sums = np.zeros(count)
-                counts = np.zeros(count)
-                for j in range(n_clusters):
-                    idx = cluster_indices[chosen[:, j]]
-                    for b in range(count):
-                        sums[b] += delta[idx[b]].sum()
-                        counts[b] += len(idx[b])
-                boot[start:start + count] = sums / counts
-            rows.append({
-                "Candidate": name, "Reference": reference, "Metric": metric_name,
-                "Gain": observed, "CI95Low": float(np.quantile(boot, 0.025)),
-                "CI95High": float(np.quantile(boot, 0.975)),
-                "Clusters": n_clusters, "Fixtures": len(y),
-            })
+    for reference in references:
+        for name in names:
+            if name == reference:
+                continue
+            for metric_name in ("brier", "logloss"):
+                # Positive gain means the candidate is better than the reference.
+                delta = losses[reference][metric_name] - losses[name][metric_name]
+                observed = float(delta.mean())
+                boot = np.empty(N_BOOT)
+                for start in range(0, N_BOOT, 100):
+                    count = min(100, N_BOOT - start)
+                    chosen = rng.integers(0, n_clusters, size=(count, n_clusters))
+                    sums = np.zeros(count)
+                    counts = np.zeros(count)
+                    for j in range(n_clusters):
+                        idx = cluster_indices[chosen[:, j]]
+                        for b in range(count):
+                            sums[b] += delta[idx[b]].sum()
+                            counts[b] += len(idx[b])
+                    boot[start:start + count] = sums / counts
+                rows.append({
+                    "Candidate": name, "Reference": reference, "Metric": metric_name,
+                    "Gain": observed, "CI95Low": float(np.quantile(boot, 0.025)),
+                    "CI95High": float(np.quantile(boot, 0.975)),
+                    "Clusters": n_clusters, "Fixtures": len(y),
+                })
     return rows
 
 
@@ -307,8 +308,8 @@ def main():
     print("\n=== PAIRED LEAGUE-WEEK BOOTSTRAP VS CLOSING MARKET ===")
     for r in ci_frame.itertuples(index=False):
         print(
-            f"{r.Candidate:27s} {r.Metric:7s} gain={r.Gain:+.6f} "
-            f"95% CI [{r.CI95Low:+.6f}, {r.CI95High:+.6f}]"
+            f"vs {r.Reference:14s} | {r.Candidate:27s} {r.Metric:7s} "
+            f"gain={r.Gain:+.6f} 95% CI [{r.CI95Low:+.6f}, {r.CI95High:+.6f}]"
         )
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
