@@ -99,7 +99,8 @@ with st.expander("Recent form and data-derived team profiles", expanded=True):
         prof = team_profile(profile_data, team)
         with col:
             st.markdown(f"**{team}**")
-            st.write(f"League position (rolling 365 days): **{prof['rank']}** · {prof['points']} points · GD {prof['gd']:+d}")
+            st.write(f"Rolling-year position: **{prof['rank']}** · {prof['points']} points · GD {prof['gd']:+d}")
+            st.write(f"Points behind this table's leader: {prof['points_behind_leader']} · points above bottom: {prof['points_above_bottom']}")
             st.write(f"Last 5: {snap['points']}/15 points · {snap['gf']:.2f} scored and {snap['ga']:.2f} conceded per match")
             st.write(f"Rolling-year goals: {prof['gf']:.1f} for, {prof['ga']:.1f} against")
             if prof["shots"] is not None:
@@ -177,7 +178,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
 
         st.markdown("**Player and match impact**")
         st.write(f"{home}: {h_known} rated starters entered; {len(home_abs)} unavailable players entered. {away}: {a_known} rated starters entered; {len(away_abs)} unavailable players entered.")
-        st.write(f"Lineup/absence xG adjustment: {home} {h_att-h_abs_att:+.2f} attack, {away} {a_att-a_abs_att:+.2f} attack; defensive absences add {a_abs_def+h_def:.2f} to {home}'s xG and {h_abs_def+a_def:.2f} to {away}'s xG.")
+        st.write(f"Attack xG adjustment: {home} {h_att-h_abs_att:+.2f}; {away} {a_att-a_abs_att:+.2f}. Defensive quality: {home} {h_def:+.2f}, {away} {a_def:+.2f}; unavailable defenders weaken the respective defence by {h_abs_def:.2f} and {a_abs_def:.2f} xG.")
         st.write(f"Rest days before {kickoff}: {home} {h_rest if h_rest is not None else 'unknown'}, {away} {a_rest if a_rest is not None else 'unknown'}. Applied home xG adjustment: {rest_adjustment:+.2f}.")
         for team, xi, status, formation in [(home,home_xi,home_status,home_formation),(away,away_xi,away_status,away_formation)]:
             st.caption(f"{team}: {status} lineup · {formation} · {len(xi)} players entered" + (f" · WARNING: expected 11, received {len(xi)}" if xi and len(xi)!=11 else ""))
