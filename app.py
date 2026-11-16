@@ -84,14 +84,14 @@ with st.expander("Team news and tactical adjustments (optional)"):
     st.markdown("**Expected-goal adjustment for absences**")
     ih, ia = st.columns(2)
     with ih:
-        st.caption(f"{home} attacking impact")
+        st.caption(f"{home} unavailable players")
+        home_absent_names = st.text_input("Names / positions absent", placeholder="e.g. striker, starting centre-back", key="hinj")
         home_attack_absence = st.slider("Home attack reduction (xG)", 0.0, 0.8, 0.0, 0.05, key="haa")
-        st.caption(f"{home} defensive impact")
         home_defence_absence = st.slider("Home defence weakening (opponent xG)", 0.0, 0.8, 0.0, 0.05, key="hda")
     with ia:
-        st.caption(f"{away} attacking impact")
+        st.caption(f"{away} unavailable players")
+        away_absent_names = st.text_input("Names / positions absent", placeholder="e.g. goalkeeper, winger", key="ainj")
         away_attack_absence = st.slider("Away attack reduction (xG)", 0.0, 0.8, 0.0, 0.05, key="aaa")
-        st.caption(f"{away} defensive impact")
         away_defence_absence = st.slider("Away defence weakening (opponent xG)", 0.0, 0.8, 0.0, 0.05, key="ada")
     st.markdown("**Tactical matchup**")
     th, ta = st.columns(2)
@@ -139,8 +139,9 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             f"Base expected goals from team attack/defence and home advantage: {home} {base_hg:.2f}, {away} {base_ag:.2f}.",
             f"Recent form (last five): {home} {h5['points']}/15 points, {away} {a5['points']}/15 points.",
         ]
-        if any([home_attack_absence, home_defence_absence, away_attack_absence, away_defence_absence]):
-            reasons.append("Absence adjustments entered: home attack -" + f"{home_attack_absence:.2f} xG, home defence +" +
+        if any([home_attack_absence, home_defence_absence, away_attack_absence, away_defence_absence]) or home_absent_names or away_absent_names:
+            reasons.append(f"Unavailable players entered: {home} — {home_absent_names or 'not specified'}; {away} — {away_absent_names or 'not specified'}.")
+            reasons.append("Manual absence adjustments: home attack -" + f"{home_attack_absence:.2f} xG, home defence +" +
                            f"{home_defence_absence:.2f} opponent xG; away attack -" + f"{away_attack_absence:.2f} xG, away defence +" +
                            f"{away_defence_absence:.2f} opponent xG.")
         if home_tactic != "No adjustment" or away_tactic != "No adjustment":
