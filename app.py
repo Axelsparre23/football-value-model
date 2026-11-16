@@ -122,7 +122,7 @@ with st.expander("Recent form and data-derived team profiles", expanded=True):
 with st.expander("Model settings and match context"):
     elo_weight = st.slider("Elo contribution to final probabilities", 0.0, 0.50, 0.25, 0.05,
                            help="The remainder comes from the Dixon–Coles goal model. This is a transparent blend, not yet empirically optimised.")
-    kickoff = st.date_input("Expected match date", value=(latest_date + pd.Timedelta(days=1)).date())
+    kickoff = st.date_input("Expected match date", value=(latest_date + pd.Timedelta(days=1)).date(), min_value=latest_date.date())
 
 if st.button("Calculate match prediction", type="primary", use_container_width=True):
     if home == away:
