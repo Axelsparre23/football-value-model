@@ -204,3 +204,18 @@ python market_price_method_backtest.py
 ```
 
 Compares proportional, power, additive and Shin margin removal across average and Bet365 opening/closing prices. It reports source coverage, aggregate results, a common-fixture comparison across all four price sources, and average-closing results by league. This is a market benchmark diagnostic only; it does not change the live calculator.
+
+
+## Opening-to-closing market movement experiment
+
+First run the price-source experiment to generate the required fixture-level file, then run:
+
+```bash
+python market_movement_backtest.py
+```
+
+This experiment uses additive margin removal and compares average opening odds, average closing odds, and a fixed 50/50 opening-closing blend on identical fixtures. It measures the size and direction of probability changes, tests whether larger movements are associated with larger improvements in closing-market scores, and reports results by league and season.
+
+Movement deciles are descriptive, not fitted trading signals. The blend is fixed in advance to avoid selecting a weight on the same evaluation sample. Outputs are saved under `output/market_movement_*.csv`.
+
+This is a probability-forecast research diagnostic only. It does not establish that market movement can be predicted in advance or that any betting strategy would be profitable.
