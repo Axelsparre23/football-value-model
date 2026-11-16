@@ -130,3 +130,20 @@ python attack_defence_backtest.py
 - Outputs: `output/attack_defence_predictions.csv` and `output/attack_defence_summary.csv`.
 
 This is a standalone research experiment. It does not change the live calculator. The model uses goals, not xG, because historical xG coverage is incomplete across the six competitions.
+
+
+## Hybrid Elo + recent form experiment
+
+Run:
+
+```bash
+python hybrid_form_backtest.py
+```
+
+This walk-forward experiment combines pre-match Elo with exponentially weighted team form: goals for/against, points per match, shots and shots on target. Match statistics are used only when available; missing values are not fabricated. A regularised multinomial model is trained on the two seasons before each target season and evaluated on the untouched target season.
+
+It compares against baseline Elo and no-vig closing market probabilities on identical odds-covered fixtures. It writes:
+- `output/hybrid_form_predictions.csv`
+- `output/hybrid_form_summary.csv`
+
+This is a research experiment and does not alter the live calculator.
