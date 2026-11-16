@@ -171,7 +171,7 @@ Run:
 python market_residual_backtest.py
 ```
 
-This experiment tests whether pre-match Elo and recent team-performance signals add predictive information beyond no-vig closing market probabilities. The market probabilities are the model's fixed starting point; a regularised multinomial model learns only a correction from Elo difference, recent goals, points, shots and shots on target.
+This experiment tests whether pre-match Elo and recent team-performance signals add predictive information beyond no-vig closing market probabilities. The market probabilities are the model's fixed starting point; a regularised multinomial model learns only a correction from Elo difference, recent goals, points, shots and shots on target. Ridge strength is selected on the second prior season after fitting on the first, then the model is refit on both prior seasons before testing. The regularisation penalty is applied on the loss scale rather than divided by sample size.
 
 For each target season, the correction is trained only on the two immediately preceding seasons. Predictions are compared with the no-vig market and baseline Elo on exactly the same odds-covered fixtures. Evaluation covers 2021/22–2025/26 in the five major European leagues where historical odds are available. Allsvenskan is skipped when sufficient historical odds are unavailable.
 
