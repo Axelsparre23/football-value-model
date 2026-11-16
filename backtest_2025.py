@@ -16,6 +16,7 @@ Outputs: output/backtest_2025_predictions.csv and
          output/backtest_2025_summary.csv
 """
 from pathlib import Path
+import argparse
 import warnings
 
 import numpy as np
@@ -64,7 +65,7 @@ def target_matches(data, league):
     return data[(data.Date >= start) & (data.Date <= end)].copy()
 
 
-def run():
+def run(include_dc=False):
     print("Downloading/loading historical results and odds...")
     data = download_data(
         Path("data/cache"), first_start_year=2010,
@@ -99,9 +100,12 @@ def run():
                 warnings.warn(f"{league_name} {match_date.date()}: insufficient prior data; date skipped.")
                 continue
 
-            dc_model = DixonColesModel(
-                half_life=half_life, reg=0.04, xg_weight=0.0
-            ).fit(train, pd.Timestamp(match_date))
+            # Dixon-Coles fitting is expensive; the default evaluates the app's Elo model only.
+            dc_model = None
+            if include_dc:
+                dc_model = DixonColesModel(
+                    half_life=half_life, reg=0.04, xg_weight=0.0
+                ).fit(train, pd.Timestamp(match_date))
 
             for _, match in day.iterrows():
                 key = (pd.Timestamp(match.Date).normalize(),
@@ -111,9 +115,10 @@ def run():
                     continue
                 try:
                     elo_p = elo_probabilities(float(elo_snapshot["EloDiff"]))
-                    dc_p, (xg_home, xg_away) = dc_model.probabilities(
-                        str(match.HomeTeam), str(match.AwayTeam)
-                    )
+                    if include_dc:
+                        dc_p, (xg_home, xg_away) = dc_model.probabilities(
+                            str(match.HomeTeam), str(match.AwayTeam)
+                        )
                 except (KeyError, ValueError, OverflowError):
                     continue
 
@@ -133,13 +138,16 @@ def run():
                     "EloPHome": float(elo_p[0]),
                     "EloPDraw": float(elo_p[1]),
                     "EloPAway": float(elo_p[2]),
-                    "DCPHome": float(dc_p[0]),
-                    "DCPDraw": float(dc_p[1]),
-                    "DCPAway": float(dc_p[2]),
-                    "DCXGHome": float(xg_home),
-                    "DCXGAway": float(xg_away),
                     "TrainingMatchesBeforeKickoff": int(len(train)),
                 }
+                if include_dc:
+                    record.update({
+                        "DCPHome": float(dc_p[0]),
+                        "DCPDraw": float(dc_p[1]),
+                        "DCPAway": float(dc_p[2]),
+                        "DCXGHome": float(xg_home),
+                        "DCXGAway": float(xg_away),
+                    })
 
                 odds_pair = odds_of(match)
                 if odds_pair is not None:
@@ -168,10 +176,14 @@ def run():
     summary_rows = []
     for league, group in predictions.groupby(["League", "LeagueName"], sort=True):
         y = group.Actual.map({"Home": 0, "Draw": 1, "Away": 2}).to_numpy()
-        for model_name, cols in [
+        model_specs = [
             ("App Elo (displayed prediction)", ["EloPHome", "EloPDraw", "EloPAway"]),
-            ("Dixon-Coles (cross-check)", ["DCPHome", "DCPDraw", "DCPAway"]),
-        ]:
+        ]
+        if include_dc:
+            model_specs.append(
+                ("Dixon-Coles (cross-check)", ["DCPHome", "DCPDraw", "DCPAway"])
+            )
+        for model_name, cols in model_specs:
             metrics = score_metrics(group[cols].to_numpy(), y)
             summary_rows.append({"League": league[0], "LeagueName": league[1],
                                  "Model": model_name, "BenchmarkMatches": len(group), **metrics})
@@ -180,11 +192,15 @@ def run():
         market_rows = group.dropna(subset=market_cols)
         if not market_rows.empty:
             market_y = market_rows.Actual.map({"Home": 0, "Draw": 1, "Away": 2}).to_numpy()
-            for model_name, cols in [
+            market_specs = [
                 ("App Elo (same odds subset)", ["EloPHome", "EloPDraw", "EloPAway"]),
-                ("Dixon-Coles (same odds subset)", ["DCPHome", "DCPDraw", "DCPAway"]),
                 ("No-vig closing market", market_cols),
-            ]:
+            ]
+            if include_dc:
+                market_specs.insert(
+                    1, ("Dixon-Coles (same odds subset)", ["DCPHome", "DCPDraw", "DCPAway"])
+                )
+            for model_name, cols in market_specs:
                 metrics = score_metrics(market_rows[cols].to_numpy(), market_y)
                 summary_rows.append({"League": league[0], "LeagueName": league[1],
                                      "Model": model_name, "BenchmarkMatches": len(market_rows), **metrics})
@@ -204,9 +220,17 @@ def run():
     print(f"Prediction detail: {OUTPUT / 'backtest_2025_predictions.csv'}")
     print(f"Summary: {OUTPUT / 'backtest_2025_summary.csv'}")
     print("\nIMPORTANT: Elo probabilities are the app's current displayed 1X2 method.")
+    if not include_dc:
+        print("Dixon-Coles was skipped for speed. Re-run with --include-dc for the slower cross-check.")
     print("Historical lineups, injuries and manual player ratings are not reconstructed,")
     print("so this test evaluates the core model without those optional inputs.")
 
 
 if __name__ == "__main__":
-    run()
+    parser = argparse.ArgumentParser(description="Walk-forward backtest of the football model.")
+    parser.add_argument(
+        "--include-dc", action="store_true",
+        help="Also fit Dixon-Coles separately before every match date (much slower)."
+    )
+    args = parser.parse_args()
+    run(include_dc=args.include_dc)
