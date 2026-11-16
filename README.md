@@ -2,15 +2,19 @@
 
 A quick Streamlit football match research tool for the Premier League, La Liga, Bundesliga, Serie A, Ligue 1 and Allsvenskan. It estimates home-win/draw/away-win probabilities and explains the main inputs.
 
+## Using the calculator
+
+Choose a league, home team and away team, then press **Calculate match prediction**. Lineups, player availability, recent form and historical evaluation are optional expandable sections. A warning appears when the latest available match data is more than 21 days old.
+
 ## Current model
 
 - **Dixon–Coles:** time-decayed team attack/defence strengths, home advantage and low-score correlation.
 - **Dynamic Elo:** team ratings update chronologically after every completed result. A home-advantage adjustment is included in the pre-match rating difference.
-- **Ensemble:** Dixon–Coles probabilities and Elo baseline probabilities are blended. The Elo share is configurable in the app; the default is 25%. This is a research setting, not an optimised weight.
+- **Current prediction default:** Elo supplies the displayed home/draw/away probabilities because it outperformed Dixon–Coles and the tested blend in the available Allsvenskan holdout. Dixon–Coles remains an independent expected-goals and probability cross-check. This result has not yet been established for every league.
 - **Player impact:** manually entered starting-XI ratings and unavailable-player ratings adjust expected goals using position weights. The app shows the method and caps adjustments. This is a transparent heuristic, not a validated player-value model.
 - **Team profile:** recent form, rolling-365-day table position, points, goal difference, goals for/against, and available shots / shots-on-target indicators. It describes observed performance and does not claim to infer a coach's exact tactical system.
 - **Match context:** rest days are calculated from each team's latest prior result. A small capped xG adjustment is applied; this needs out-of-sample validation.
-- **Evaluation:** chronological 80/20 holdout comparison of Dixon–Coles and the Elo ensemble using Brier score, log loss and accuracy. The evaluation is per selected league and does not use future results to predict earlier holdout fixtures.
+- **Evaluation:** chronological training/validation/test comparison, with blend-weight selection and temperature calibration on validation data only. The final test block is held back from tuning.
 
 ## Player input format
 
