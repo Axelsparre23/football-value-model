@@ -84,9 +84,10 @@ def apply_calibrator(model, market_p):
 
 def choose_ridge(fit, validation):
     x_fit = fit[MARKET_COLS].to_numpy(dtype=float)
-    y_fit = fit.Actual.map(OUTCOME_MAP).to_numpy()
+    y_fit = np.where(fit.FTHG > fit.FTAG, 0, np.where(fit.FTHG == fit.FTAG, 1, 2))
     x_val = validation[MARKET_COLS].to_numpy(dtype=float)
-    y_val = validation.Actual.map(OUTCOME_MAP).to_numpy()
+    y_val = np.where(validation.FTHG > validation.FTAG, 0,
+                     np.where(validation.FTHG == validation.FTAG, 1, 2))
     scores = []
     for ridge in RIDGE_CANDIDATES:
         model = fit_calibrator(x_fit, y_fit, ridge)
