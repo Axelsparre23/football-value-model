@@ -112,3 +112,21 @@ python league_elo_optimisation.py
 - Outputs: `output/league_elo_optimisation_predictions.csv` and `output/league_elo_optimisation_summary.csv`.
 
 This is an experiment only. It does not change the production calculator or its Elo settings. Parameters are selected using historical validation data before each target season; the target season is not used for tuning. A change should only be considered after consistent out-of-sample improvements across leagues and seasons.
+
+
+## Poisson attack/defence experiment
+
+Run the separate attack/defence model evaluation with:
+
+```bash
+python attack_defence_backtest.py
+```
+
+- Fits regularised team attack and defence strengths from the two seasons immediately before each target season.
+- Converts expected home and away goals into 1X2 probabilities using independent Poisson goal distributions.
+- Tests on the following season without fitting on target-season results.
+- Compares with the existing pre-match Elo model and no-vig market on exactly the same odds-covered fixtures.
+- Reports Brier score, log loss, RPS, accuracy and results by league-season.
+- Outputs: `output/attack_defence_predictions.csv` and `output/attack_defence_summary.csv`.
+
+This is a standalone research experiment. It does not change the live calculator. The model uses goals, not xG, because historical xG coverage is incomplete across the six competitions.
