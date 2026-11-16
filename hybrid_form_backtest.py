@@ -230,6 +230,7 @@ def main():
             hybrid_probs = predict(model, test[FEATURES].to_numpy(dtype=float))
             for i, (_, match) in enumerate(test.iterrows()):
                 actual = 0 if match.FTHG > match.FTAG else (1 if match.FTHG == match.FTAG else 2)
+                elo_probs = elo_probabilities(float(match.EloDiff))
                 row = {
                     "Date": pd.Timestamp(match.Date).date().isoformat(),
                     "League": code, "LeagueName": league_name, "Season": season,
@@ -238,7 +239,9 @@ def main():
                     "HybridHome": float(hybrid_probs[i, 0]),
                     "HybridDraw": float(hybrid_probs[i, 1]),
                     "HybridAway": float(hybrid_probs[i, 2]),
-                    "EloHome": *elo_probabilities(float(match.EloDiff)),
+                    "EloHome": float(elo_probs[0]),
+                    "EloDraw": float(elo_probs[1]),
+                    "EloAway": float(elo_probs[2]),
                 }
                 try:
                     odds_pair = odds_of(pd.Series(match.to_dict()))
