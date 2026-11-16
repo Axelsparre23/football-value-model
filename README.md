@@ -162,3 +162,21 @@ Tests whether partially regressing team Elo ratings toward the league mean at th
 This is a research experiment only. It does not change the live calculator. Outputs:
 - `output/seasonal_elo_predictions.csv`
 - `output/seasonal_elo_summary.csv`
+
+## Market-anchored residual model experiment
+
+Run:
+
+```bash
+python market_residual_backtest.py
+```
+
+This experiment tests whether pre-match Elo and recent team-performance signals add predictive information beyond no-vig closing market probabilities. The market probabilities are the model's fixed starting point; a regularised multinomial model learns only a correction from Elo difference, recent goals, points, shots and shots on target.
+
+For each target season, the correction is trained only on the two immediately preceding seasons. Predictions are compared with the no-vig market and baseline Elo on exactly the same odds-covered fixtures. Evaluation covers 2021/22–2025/26 in the five major European leagues where historical odds are available. Allsvenskan is skipped when sufficient historical odds are unavailable.
+
+Outputs:
+- `output/market_residual_predictions.csv`
+- `output/market_residual_summary.csv`
+
+This is a research-only experiment. It does not change the live calculator. A lower Brier score and log loss than the market across multiple held-out seasons would be evidence of improved probability forecasts, but not proof of a persistent betting or financial edge.
