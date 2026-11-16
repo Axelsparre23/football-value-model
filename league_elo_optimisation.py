@@ -140,10 +140,8 @@ def main():
                     continue
                 tuned_p = probabilities([tuned_diff])[0]
                 baseline_p = probabilities([baseline_diff])[0]
-                actual = int(match.FTHG > match.FTAG) * 0 + (
-                    0 if match.FTHG > match.FTAG else
-                    1 if match.FTHG == match.FTAG else 2
-                )
+                actual = (0 if match.FTHG > match.FTAG else
+                          1 if match.FTHG == match.FTAG else 2)
                 row = {
                     "Date": pd.Timestamp(match.Date).date().isoformat(),
                     "League": league_code, "LeagueName": league_name,
