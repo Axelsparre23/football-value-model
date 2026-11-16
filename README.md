@@ -180,3 +180,16 @@ Outputs:
 - `output/market_residual_summary.csv`
 
 This is a research-only experiment. It does not change the live calculator. A lower Brier score and log loss than the market across multiple held-out seasons would be evidence of improved probability forecasts, but not proof of a persistent betting or financial edge.
+
+
+## Market calibration research
+
+Run the chronological test of a restrained market-only calibration layer:
+
+```bash
+python market_calibration_backtest.py
+```
+
+The experiment compares raw no-vig closing 1X2 probabilities with a calibrated version on identical, unseen fixtures. It fits on the first prior season, selects regularisation on the next prior season, refits on both prior seasons, and tests on the target season. It uses no team features. Results are written to `output/market_calibration_predictions.csv` and `output/market_calibration_summary.csv`.
+
+Calibration is a research experiment only. It is not used by the live calculator unless it demonstrates repeatable out-of-sample improvement.
