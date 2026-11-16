@@ -1,8 +1,9 @@
 """Multi-source football data loader.
 
-Historical top-five results: Football-Data.co.uk.
+Historical top-five results: Football-Data.co.uk (2010/11 onward).
+Historical Allsvenskan results: Swedish Football Dataset (2011–2025, CC BY 4.0).
 Current-season results/fixtures: open-matchday GitHub dataset.
-The open-matchday provider documents uneven match-stat coverage; missing values stay NaN.
+The providers have uneven match-stat coverage; missing values stay NaN.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -27,10 +28,11 @@ OPEN_MATCHDAY = {
     "SWE": ("SWE_1_allsvenskan", "2026"),
 }
 BASE_URL = "https://www.football-data.co.uk/mmz4281/{season}/{league}.csv"
+SWEDISH_HISTORY_URL = "https://raw.githubusercontent.com/Mongosaurusrex/swedish-football-dataset/main/data/raw/SE1_2011_2025.csv"
 OPEN_URL = "https://raw.githubusercontent.com/oladeeayo/open-matchday/master/data/{folder}/results_{season}.csv"
 USER_AGENT = "FootballValueModel/2.0 (personal research project)"
 
-def season_codes(first_start_year: int = 2016, current_start_year: int | None = None) -> list[str]:
+def season_codes(first_start_year: int = 2010, current_start_year: int | None = None) -> list[str]:
     now = pd.Timestamp.utcnow()
     current_start_year = current_start_year or (now.year if now.month >= 7 else now.year - 1)
     return [f"{y % 100:02d}{(y + 1) % 100:02d}" for y in range(first_start_year, current_start_year + 1)]
@@ -96,6 +98,35 @@ def download_data(cache_dir: Path = Path("data/cache"), first_start_year: int = 
                             frames.append(raw)
                     except Exception as exc:
                         failures.append(f"{path.name}: {exc}")
+
+    # Historical Allsvenskan results (2011–2025). This source contains scores,
+    # dates and teams, but not the detailed match statistics in the top-five feed.
+    if "SWE" in leagues:
+        path = cache_dir / "allsvenskan_2011_2025.csv"
+        if not path.exists():
+            try:
+                response = session.get(SWEDISH_HISTORY_URL, timeout=30)
+                response.raise_for_status()
+                path.write_bytes(response.content)
+            except requests.RequestException as exc:
+                failures.append(f"Swedish historical dataset: {exc}")
+        if path.exists():
+            try:
+                raw = pd.read_csv(path, encoding="utf-8")
+                required = {"date", "home_team", "away_team", "home_goals", "away_goals"}
+                if not required.issubset(raw.columns):
+                    raise ValueError("Swedish historical file is missing required columns.")
+                historical = pd.DataFrame({
+                    "Date": pd.to_datetime(raw["date"], dayfirst=True, errors="coerce"),
+                    "HomeTeam": raw["home_team"].astype(str),
+                    "AwayTeam": raw["away_team"].astype(str),
+                    "FTHG": pd.to_numeric(raw["home_goals"], errors="coerce"),
+                    "FTAG": pd.to_numeric(raw["away_goals"], errors="coerce"),
+                    "League": "SWE",
+                })
+                frames.append(historical.dropna(subset=["Date", "FTHG", "FTAG"]))
+            except Exception as exc:
+                failures.append(f"{path.name}: {exc}")
 
     # Current-season results/fixtures for all six leagues, including Allsvenskan.
     for league in leagues:
