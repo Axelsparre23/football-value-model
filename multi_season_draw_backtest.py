@@ -181,7 +181,7 @@ def main():
                     "FlexHome": flex[0], "FlexDraw": flex[1], "FlexAway": flex[2],
                     "TrainingMatches": len(train_labels),
                 }
-                odds_pair = odds_of(match)
+                odds_pair = odds_of(match._asdict())
                 if odds_pair is not None:
                     try:
                         market, _ = odds_pair
