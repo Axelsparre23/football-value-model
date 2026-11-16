@@ -15,9 +15,36 @@ from advanced_model import (
 from model_research import chronological_ensemble_evaluation
 from team_news import fetch_fixture_team_news, get_api_football_key
 
-st.set_page_config(page_title="Football Match Calculator", page_icon="⚽", layout="wide")
-st.title("Football Match Calculator")
-st.caption("Select a league and two teams to get a match prediction.")
+st.set_page_config(page_title="Match Analysis", page_icon=":soccer:", layout="wide")
+
+st.markdown("""
+<style>
+:root { --ink:#17251f; --muted:#68756e; --line:#e4e9e5; --paper:#f6f8f6; --accent:#176b4a; }
+.stApp { background:var(--paper); color:var(--ink); }
+.block-container { max-width:1180px; padding-top:2.1rem; padding-bottom:3rem; }
+h1,h2,h3 { color:var(--ink); letter-spacing:-.035em; }
+h1 { font-size:2.35rem !important; font-weight:720 !important; }
+h2 { font-size:1.45rem !important; font-weight:680 !important; }
+h3 { font-size:1.08rem !important; font-weight:650 !important; }
+[data-testid="stCaptionContainer"] p { color:var(--muted); }
+[data-testid="stMetric"] { background:#fff; border:1px solid var(--line); border-radius:12px; padding:15px 17px; }
+[data-testid="stMetricLabel"] { color:var(--muted); font-size:.82rem; }
+[data-testid="stMetricValue"] { color:var(--ink); font-weight:700; }
+div[data-testid="stExpander"] { background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+div[data-testid="stSelectbox"] label, div[data-testid="stDateInput"] label, div[data-testid="stTextArea"] label { color:#34443b; font-weight:600; }
+.stButton > button[kind="primary"] { background:#176b4a; border:1px solid #176b4a; border-radius:9px; font-weight:650; min-height:2.8rem; }
+.stButton > button[kind="primary"]:hover { background:#10563b; border-color:#10563b; }
+.stButton > button { border-radius:9px; }
+hr { border-color:var(--line); }
+[data-testid="stAlert"] { border-radius:10px; }
+.match-hero { padding:1.1rem 1.35rem; background:#fff; border:1px solid var(--line); border-radius:14px; margin:.6rem 0 1.1rem; }
+.match-kicker { color:var(--accent); font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; font-weight:750; }
+.match-sub { color:var(--muted); font-size:.9rem; margin-top:.25rem; }
+.small-note { color:var(--muted); font-size:.82rem; }
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown('<div class="match-hero"><div class="match-kicker">Match intelligence · Research edition</div><h1 style="margin:.25rem 0 0">Match analysis</h1><div class="match-sub">Probability estimates, team context and model diagnostics across six leagues.</div></div>', unsafe_allow_html=True)
 
 @st.cache_data(ttl=21600, show_spinner=False)
 def load_league(code):
@@ -180,11 +207,6 @@ with st.expander("Optional: recent form and team profiles", expanded=False):
                 st.caption(f"Shot volume is {descriptor} the league's available-match average ({league_shots:.1f}).")
             st.caption("Profile describes observed output; it does not claim to identify a coach's exact tactical system.")
 
-with st.expander("Match date", expanded=False):
-    default_kickoff = max((latest_date + pd.Timedelta(days=1)).date(),
-                          (pd.Timestamp.now().normalize() + pd.Timedelta(days=1)).date())
-    kickoff = st.date_input("Expected match date", value=default_kickoff, min_value=latest_date.date())
-
 if st.button("Calculate match prediction", type="primary", use_container_width=True):
     if home == away:
         st.error("Choose two different teams.")
@@ -223,8 +245,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         best = int(np.argmax(final_probs))
 
         st.divider()
-        st.subheader(f"Elo prediction: {labels[best]}")
-        st.markdown(f"### {final_probs[best]:.1%}")
+        st.markdown(f'<div class="match-hero"><div class="match-kicker">Model selection · Dynamic Elo</div><h2 style="margin:.3rem 0">{labels[best]}</h2><div style="font-size:2rem;font-weight:750;color:#176b4a">{final_probs[best]:.1%}</div><div class="match-sub">Highest estimated outcome probability · not a certainty</div></div>', unsafe_allow_html=True)
         c1,c2,c3 = st.columns(3)
         c1.metric(labels[0], f"{final_probs[0]:.1%}")
         c2.metric("Draw", f"{final_probs[1]:.1%}")
