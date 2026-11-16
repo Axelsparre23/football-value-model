@@ -32,6 +32,10 @@ def fit_model(code, signature, data):
 def get_elo(data):
     return elo_history(data)
 
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_team_news(api_key, code, home_team, away_team, match_date):
+    return fetch_fixture_team_news(api_key, code, home_team, away_team, match_date)
+
 league_code = st.selectbox("League", list(LEAGUES), format_func=lambda x: LEAGUES[x])
 with st.spinner(f"Loading {LEAGUES[league_code]} results and available match statistics..."):
     try:
@@ -67,6 +71,16 @@ with st.expander("Match date", expanded=False):
                           (pd.Timestamp.now().normalize() + pd.Timedelta(days=1)).date())
     kickoff = st.date_input("Expected match date", value=default_kickoff, min_value=latest_date.date())
 
+lookup_selection = f"{league_code}|{home}|{away}|{kickoff.isoformat()}"
+if st.session_state.get("api_news_selection") != lookup_selection:
+    if st.session_state.get("api_news_selection") is not None:
+        for k in ("hxi","axi","habs","aabs"):
+            st.session_state[k] = ""
+        for k,v in (("hs","Not entered"),("as","Not entered"),("hf","Other / unknown"),("af","Other / unknown")):
+            st.session_state[k] = v
+        st.session_state.pop("api_news_result", None)
+    st.session_state["api_news_selection"] = lookup_selection
+
 api_key = get_api_football_key(st)
 with st.expander("Automatic team news (free API-Football)", expanded=False):
     st.caption("Optional lookup for confirmed starting XIs, season-average player ratings where available, and reported injuries/suspensions.")
@@ -76,17 +90,18 @@ with st.expander("Automatic team news (free API-Football)", expanded=False):
     if st.button("Fetch fixture lineups, ratings and absences", key="fetch_team_news", disabled=not bool(api_key)):
         try:
             with st.spinner("Looking up the selected fixture..."):
-                news = fetch_fixture_team_news(api_key, league_code, home, away, kickoff)
+                news = cached_team_news(api_key, league_code, home, away, kickoff)
             for k in ("hxi","axi","habs","aabs"): st.session_state[k] = ""
             for k,v in (("hs","Not entered"),("as","Not entered"),("hf","Other / unknown"),("af","Other / unknown")):
                 st.session_state[k]=v
             for prefix,item in (("h",news["home"]),("a",news["away"])):
                 if item["xi"]:
                     st.session_state[prefix+"xi"]=item["xi"]
-                    st.session_state[prefix+"s"]="Confirmed"
+                    st.session_state[prefix+"s"]="Confirmed" if item["count"] == 11 else "Partial / incomplete"
                     st.session_state[prefix+"f"]=item["formation"] if item["formation"] in ["4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","4-1-4-1"] else "Other / unknown"
                 st.session_state[prefix+"abs"]=item["abs"]
             st.session_state["api_news_result"]=news
+            st.session_state["api_news_selection"]=lookup_selection
             st.rerun()
         except Exception as exc:
             st.error(f"Team-news lookup failed: {exc}")
@@ -105,7 +120,7 @@ with st.expander("Optional: lineups and unavailable players", expanded=False):
     l1, l2 = st.columns(2)
     with l1:
         st.markdown(f"**{home}**")
-        home_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Confirmed"], key="hs")
+        home_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Partial / incomplete", "Confirmed"], key="hs")
         home_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="hf")
         home_xi_raw = st.text_area("Starting XI — player | rating | position", height=120, key="hxi",
                                    placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
@@ -113,7 +128,7 @@ with st.expander("Optional: lineups and unavailable players", expanded=False):
                                     placeholder="Starting striker | 7.8 | ST")
     with l2:
         st.markdown(f"**{away}**")
-        away_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Confirmed"], key="as")
+        away_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Partial / incomplete", "Confirmed"], key="as")
         away_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="af")
         away_xi_raw = st.text_area("Starting XI — player | rating | position", height=120, key="axi",
                                    placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
