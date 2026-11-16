@@ -232,3 +232,14 @@ python market_direction_backtest.py
 For home, draw and away probabilities separately, this groups fixtures by signed opening-to-closing probability movement (largest decreases through largest increases). It compares mean opening probability, closing probability and realised outcome frequency, plus binary Brier scores. Results are also broken down by league and season.
 
 The groups are descriptive and use the full historical sample; they are not a fitted or deployable prediction rule. Outputs: `output/market_direction_*.csv`.
+
+
+## Market movement significance test
+
+Run after `market_movement_backtest.py`:
+
+```bash
+python market_movement_significance.py
+```
+
+This performs paired fixture-level bootstrap resampling (2,000 replicates) to estimate 95% confidence intervals for opening-to-closing Brier and log-loss improvements, overall and by outcome, league and season. Positive values mean closing odds performed better. This quantifies uncertainty; it does not establish betting profitability.
