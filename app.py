@@ -46,6 +46,20 @@ with a:
 with b:
     away = st.selectbox("Away team", [x for x in teams if x != home], index=0)
 
+with st.expander("Starting XI (optional)", expanded=True):
+    st.caption("Enter one player per line. Add positions if known, e.g. GK: Player Name. This is saved only for this prediction session and does not yet change the statistical probabilities.")
+    lh, la = st.columns(2)
+    with lh:
+        st.markdown(f"**{home}**")
+        home_lineup_status = st.selectbox("Lineup status", ["Expected", "Confirmed"], key="home_lineup_status")
+        home_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="home_formation")
+        home_lineup = st.text_area("Starting XI — one player per line", height=220, placeholder="GK: Player name\nRB: Player name\nCB: Player name\n...", key="home_lineup")
+    with la:
+        st.markdown(f"**{away}**")
+        away_lineup_status = st.selectbox("Lineup status", ["Expected", "Confirmed"], key="away_lineup_status")
+        away_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="away_formation")
+        away_lineup = st.text_area("Starting XI — one player per line", height=220, placeholder="GK: Player name\nRB: Player name\nCB: Player name\n...", key="away_lineup")
+
 # Recent form and match-stat summaries are computed only from matches before today.
 def team_snapshot(df, team, n=5):
     mask = (df.HomeTeam == team) | (df.AwayTeam == team)
@@ -124,7 +138,6 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         probs = np.array([np.tril(mat, -1).sum(), np.trace(mat), np.triu(mat, 1).sum()])
         names = [home, "Draw", away]
         best = int(np.argmax(probs))
-        exact = np.unravel_index(np.argmax(mat), mat.shape)
 
         st.divider()
         st.subheader(f"Most likely outcome: {names[best]}")
@@ -133,8 +146,23 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         p1.metric(f"{home} win", f"{probs[0]:.1%}")
         p2.metric("Draw", f"{probs[1]:.1%}")
         p3.metric(f"{away} win", f"{probs[2]:.1%}")
-        st.metric("Most likely score", f"{exact[0]} – {exact[1]}")
         st.write(f"Expected goals after adjustments: **{home} {adj_hg:.2f} – {adj_ag:.2f} {away}**")
+
+        st.markdown("**Entered starting XIs**")
+        xi1, xi2 = st.columns(2)
+        for col, team, lineup, status, formation in [
+            (xi1, home, home_lineup, home_lineup_status, home_formation),
+            (xi2, away, away_lineup, away_lineup_status, away_formation),
+        ]:
+            with col:
+                st.markdown(f"**{team}** · {status} · {formation}")
+                players = [line.strip() for line in lineup.splitlines() if line.strip()]
+                if players:
+                    st.write("\n".join(f"{i + 1}. {player}" for i, player in enumerate(players)))
+                    if len(players) != 11:
+                        st.warning(f"{len(players)} players entered; a starting XI normally contains 11.")
+                else:
+                    st.caption("No lineup entered.")
 
         st.markdown("**Why the model leans this way**")
         reasons = [
