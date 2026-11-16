@@ -147,3 +147,18 @@ It compares against baseline Elo and no-vig closing market probabilities on iden
 - `output/hybrid_form_summary.csv`
 
 This is a research experiment and does not alter the live calculator.
+
+
+## Seasonal Elo regression experiment
+
+Run:
+
+```bash
+python seasonal_elo_backtest.py
+```
+
+Tests whether partially regressing team Elo ratings toward the league mean at the start of each new season improves predictions. Candidate carryover factors are compared on 2021–2024 development seasons; the best factor by Brier score is then evaluated on the untouched 2025 holdout (2025/26 for the European leagues and 2025 for Allsvenskan). The final holdout is also compared with baseline Elo and the no-vig market on the same odds-covered fixtures.
+
+This is a research experiment only. It does not change the live calculator. Outputs:
+- `output/seasonal_elo_predictions.csv`
+- `output/seasonal_elo_summary.csv`
