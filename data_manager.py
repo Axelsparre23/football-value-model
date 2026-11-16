@@ -61,6 +61,36 @@ def _normalise_open_matchday(raw: pd.DataFrame, league_code: str) -> pd.DataFram
     out["League"] = league_code
     return out.dropna(subset=required).copy()
 
+def _normalise_allsvenskan_current(raw: pd.DataFrame) -> pd.DataFrame:
+    """Convert the current Allsvenskan fixture export to completed match results."""
+    required = {
+        "team_h_name", "team_a_name", "team_h_score", "team_a_score",
+        "kickoff_time", "finished",
+    }
+    if not required.issubset(raw.columns):
+        raise ValueError("Allsvenskan current-season file is missing required columns.")
+
+    out = pd.DataFrame({
+        "Date": pd.to_datetime(raw["kickoff_time"], utc=True, errors="coerce")
+                  .dt.tz_convert("Europe/Stockholm").dt.tz_localize(None),
+        "HomeTeam": raw["team_h_name"].astype(str).str.strip(),
+        "AwayTeam": raw["team_a_name"].astype(str).str.strip(),
+        "FTHG": pd.to_numeric(raw["team_h_score"], errors="coerce"),
+        "FTAG": pd.to_numeric(raw["team_a_score"], errors="coerce"),
+    })
+    # Keep team names consistent with the 2011–2025 historical archive.
+    aliases = {
+        "BP": "IF Brommapojkarna",
+        "Hammarby": "Hammarby IF",
+        "Djurgården": "Djurgårdens IF",
+    }
+    out["HomeTeam"] = out["HomeTeam"].replace(aliases)
+    out["AwayTeam"] = out["AwayTeam"].replace(aliases)
+    finished = raw["finished"].astype(str).str.strip().str.lower().isin({"true", "1", "yes"})
+    out = out.loc[finished].copy()
+    out["League"] = "SWE"
+    return out.dropna(subset=["Date", "FTHG", "FTAG"]).copy()
+
 def download_data(cache_dir: Path = Path("data/cache"), first_start_year: int = 2016,
                   leagues: tuple[str, ...] = tuple(LEAGUES), refresh_current: bool = True) -> pd.DataFrame:
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -146,6 +176,31 @@ def download_data(cache_dir: Path = Path("data/cache"), first_start_year: int = 
             try:
                 raw = pd.read_csv(path)
                 frames.append(_normalise_open_matchday(raw, league))
+            except Exception as exc:
+                failures.append(f"{path.name}: {exc}")
+
+    # The Allsvenskan historical archive ends in 2025. Use the current-season
+    # fixture export from the public Fantasy Allsvenskan API mirror for 2026
+    # completed scores; it is refreshed several times daily upstream.
+    if "SWE" in leagues:
+        season = pd.Timestamp.now().year
+        path = cache_dir / f"allsvenskan_current_{season}.csv"
+        if not path.exists() or refresh_current:
+            try:
+                url = f"https://raw.githubusercontent.com/TopMarx/allsvenskan/main/data/{season}/csv/fixtures.csv"
+                response = session.get(url, timeout=30)
+                response.raise_for_status()
+                path.write_bytes(response.content)
+            except requests.RequestException as exc:
+                failures.append(f"Allsvenskan current-season feed: {exc}")
+        if path.exists():
+            try:
+                raw = pd.read_csv(path)
+                current = _normalise_allsvenskan_current(raw)
+                if not current.empty:
+                    frames.append(current)
+                else:
+                    failures.append("Allsvenskan current-season feed contained no completed results.")
             except Exception as exc:
                 failures.append(f"{path.name}: {exc}")
 
