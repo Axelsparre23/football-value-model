@@ -28,6 +28,13 @@ Examples: `Alex Smith | 7.6 | ST`, `Jordan Jones | 7.2 | CB`. Positions recognis
 
 Lineup and absence information is manual. No automatic injury, suspension, confirmed-lineup or player-rating feed is connected. Do not treat an expected lineup as confirmed.
 
+## Automatic team-news integration
+
+- Optional provider: [API-Football / API-Sports](https://www.api-football.com/). Its free plan advertises 100 requests/day and endpoints for fixtures, lineups, player statistics and injuries. Free-plan season coverage is restricted and must be checked for each competition/season.
+- Configure `API_FOOTBALL_KEY` as a Codespaces environment variable or in `.streamlit/secrets.toml`. Never commit the key to GitHub.
+- The app searches for the selected home/away fixture around the selected date, then retrieves confirmed lineups, season-average player ratings where available and fixture-level absences. Missing data stays missing; expected lineups are never fabricated.
+- SofaScore is not scraped: it has no official public API and its terms restrict automated extraction and reuse.
+
 ## Data sources
 
 - [Football-Data.co.uk](https://www.football-data.co.uk/): historical results for the five major European leagues from 2010/11 onward; detailed statistics vary by league and season.
@@ -37,7 +44,7 @@ Lineup and absence information is manual. No automatic injury, suspension, confi
 
 ## Important limitations
 
-- There is no consistent free source connected for player-level ratings, injuries, suspensions, confirmed XIs, xG, possession, PPDA or detailed tactical events across all six competitions.
+- The optional API-Football connection may not return current-season data for every competition on the free tier. No provider guarantees complete player ratings, injuries, suspensions or confirmed XIs across all six competitions. xG, possession, PPDA and detailed tactical events remain inconsistently available.
 - The table profile uses a rolling 365-day window as a season-to-date approximation. This is useful for context but is not an official competition table at every point in the season.
 - Elo's standalone draw mapping, player impact coefficients and rest-day adjustment remain heuristic and are not yet validated as live prediction inputs.
 - The research evaluator now uses whole-date chronological partitions (60% training, 20% validation, 20% final test), selects the Dixon–Coles/Elo blend weight on validation data, fits temperature calibration on validation data, and reports raw and calibrated Brier, log-loss and ranked probability scores on the untouched final block.
