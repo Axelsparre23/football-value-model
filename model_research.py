@@ -146,6 +146,8 @@ def chronological_ensemble_evaluation(data, dc_model_class):
         for d, e in zip(validation_scores["dixon_coles"], validation_scores["elo"])
     ])
     temperature = _fit_temperature(validation_blend, validation_scores["outcomes"])
+    dc_temperature = _fit_temperature(validation_scores["dixon_coles"], validation_scores["outcomes"])
+    elo_temperature = _fit_temperature(validation_scores["elo"], validation_scores["outcomes"])
 
     # Refit the goal model with all information available before the final test period.
     test_model = dc_model_class(half_life=half_life, reg=0.04, xg_weight=0.0)
@@ -162,6 +164,10 @@ def chronological_ensemble_evaluation(data, dc_model_class):
     ])
     raw_metrics = _metrics(raw_blend, test_scores["outcomes"])
     calibrated_metrics = _metrics(test_scores["ensemble"], test_scores["outcomes"])
+    calibrated_dc = np.vstack([_temperature(row, dc_temperature) for row in test_scores["dixon_coles"]])
+    calibrated_elo = np.vstack([_temperature(row, elo_temperature) for row in test_scores["elo"]])
+    calibrated_dc_metrics = _metrics(calibrated_dc, test_scores["outcomes"])
+    calibrated_elo_metrics = _metrics(calibrated_elo, test_scores["outcomes"])
 
     return {
         "train_matches": int(len(train)),
@@ -171,9 +177,13 @@ def chronological_ensemble_evaluation(data, dc_model_class):
         "validation_end": str(validation_end.date()),
         "elo_weight": best_weight,
         "temperature": temperature,
+        "dc_temperature": dc_temperature,
+        "elo_temperature": elo_temperature,
         "validation_log_loss": best_loss,
         "dixon_coles": dc_metrics,
         "elo": elo_metrics,
         "elo_ensemble": raw_metrics,
+        "calibrated_dixon_coles": calibrated_dc_metrics,
+        "calibrated_elo": calibrated_elo_metrics,
         "calibrated_ensemble": calibrated_metrics,
     }
