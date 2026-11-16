@@ -11,19 +11,25 @@ def elo_history(data: pd.DataFrame, k: float = 22.0, home_advantage: float = 65.
     """Return pre-match Elo ratings per fixture and final ratings, in strict date order."""
     ratings = {}
     rows = []
-    for _, match in data.sort_values(["Date", "League"]).iterrows():
-        h, a = str(match.HomeTeam), str(match.AwayTeam)
-        rh, ra = ratings.get(h, initial), ratings.get(a, initial)
-        rows.append({"Date": match.Date, "HomeTeam": h, "AwayTeam": a,
-                     "EloHome": rh, "EloAway": ra, "EloDiff": rh + home_advantage - ra})
-        hg, ag = int(match.FTHG), int(match.FTAG)
-        actual = 1.0 if hg > ag else (0.5 if hg == ag else 0.0)
-        expected = 1.0 / (1.0 + 10.0 ** (-(rh + home_advantage - ra) / 400.0))
-        margin = abs(hg - ag)
-        multiplier = math.log1p(margin) * (2.2 / (2.2 + 0.001 * abs(rh - ra))) if margin else 1.0
-        change = k * multiplier * (actual - expected)
-        ratings[h] = rh + change
-        ratings[a] = ra - change
+    ordered = data.sort_values(["Date", "League"])
+    # Score every fixture on a date from the same pre-match rating snapshot.
+    for _, day_block in ordered.groupby(ordered.Date.dt.normalize(), sort=True):
+        updates = []
+        for _, match in day_block.iterrows():
+            h, a = str(match.HomeTeam), str(match.AwayTeam)
+            rh, ra = ratings.get(h, initial), ratings.get(a, initial)
+            rows.append({"Date": match.Date, "HomeTeam": h, "AwayTeam": a,
+                         "EloHome": rh, "EloAway": ra, "EloDiff": rh + home_advantage - ra})
+            hg, ag = int(match.FTHG), int(match.FTAG)
+            actual = 1.0 if hg > ag else (0.5 if hg == ag else 0.0)
+            expected = 1.0 / (1.0 + 10.0 ** (-(rh + home_advantage - ra) / 400.0))
+            margin = abs(hg - ag)
+            multiplier = math.log1p(margin) * (2.2 / (2.2 + 0.001 * abs(rh - ra))) if margin else 1.0
+            change = k * multiplier * (actual - expected)
+            updates.append((h, a, change))
+        for h, a, change in updates:
+            ratings[h] = ratings.get(h, initial) + change
+            ratings[a] = ratings.get(a, initial) - change
     return pd.DataFrame(rows), ratings
 
 def elo_probabilities(elo_diff: float, draw_base: float = 0.265):
