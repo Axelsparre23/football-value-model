@@ -204,11 +204,11 @@ with st.expander("Historical model evaluation — tune, calibrate, then test"):
             st.write(f"Training: {result['train_matches']:,} · validation: {result['validation_matches']:,} · final test: {result['test_matches']:,} · test begins: {result['cutoff']}")
             st.write(f"Validation-selected Elo weight: **{result['elo_weight']:.1%}** · calibration temperature: **{result['temperature']:.3f}**")
             metrics = pd.DataFrame(
-                [result["dixon_coles"], result["elo"], result["elo_ensemble"], result["calibrated_ensemble"]],
-                index=["Dixon–Coles", "Elo only", "Tuned DC + Elo", "Tuned + calibrated"]
+                [result["dixon_coles"], result["elo"], result["calibrated_dixon_coles"], result["calibrated_elo"], result["elo_ensemble"], result["calibrated_ensemble"]],
+                index=["Dixon–Coles raw", "Elo raw", "Dixon–Coles calibrated", "Elo calibrated", "Tuned DC + Elo", "Tuned + calibrated ensemble"]
             )
             st.dataframe(metrics, use_container_width=True)
-            dc, tuned, calibrated = result["dixon_coles"], result["elo_ensemble"], result["calibrated_ensemble"]
+            dc, tuned, calibrated = result["calibrated_dixon_coles"], result["elo_ensemble"], result["calibrated_ensemble"]
             if calibrated["Log loss"] < dc["Log loss"] and calibrated["Brier"] < dc["Brier"] and calibrated["RPS"] < dc["RPS"]:
                 st.success("The tuned and calibrated ensemble improved all three probability scores on the final test period.")
             else:
