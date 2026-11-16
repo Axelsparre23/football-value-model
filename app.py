@@ -14,7 +14,7 @@ st.caption("Premier League · La Liga · Bundesliga · Serie A · Ligue 1 · All
 
 @st.cache_data(ttl=21600, show_spinner=False)
 def load_league(code):
-    return download_data(Path("data/cache"), first_start_year=2018, leagues=(code,), refresh_current=True)
+    return download_data(Path("data/cache"), first_start_year=2010, leagues=(code,), refresh_current=True)
 
 @st.cache_resource(show_spinner=False)
 def fit_model(code, signature, data):
@@ -39,7 +39,8 @@ teams = sorted(set(recent_teams.HomeTeam) | set(recent_teams.AwayTeam))
 if len(teams) < 2:
     teams = sorted(set(data.HomeTeam) | set(data.AwayTeam))
 
-st.caption(f"{len(data):,} completed matches loaded · latest result: {latest_date.date()}")
+first_date = data.Date.min()
+st.caption(f"{len(data):,} completed matches loaded · coverage: {first_date.year}–{latest_date.year} · latest result: {latest_date.date()}")
 a, b = st.columns(2)
 with a:
     home = st.selectbox("Home team", teams, index=0)
@@ -186,9 +187,9 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
 
 with st.expander("Data sources, coverage and limitations"):
     st.markdown(
-        "- **Football-Data.co.uk:** historical results and odds for the five major European leagues.\n"
+        "- **Football-Data.co.uk:** historical results and odds for the five major European leagues, requested from 2010/11 onward.\n"
         "- **open-matchday (GitHub):** current-season results and fixtures for all six competitions; selected match statistics where the upstream provider supplies them.\n"
-        "- **Allsvenskan:** currently has results/fixtures coverage in open-matchday, but not the same depth of match statistics as the top five.\n"
+        "- **Allsvenskan historical results:** Swedish Football Dataset, 2011–2025 (CC BY 4.0; attribution: Nathan Dygant, swedish-football-dataset). Current 2026 season comes from open-matchday. Historical Allsvenskan data contains results, not detailed match statistics.\n"
         "- **Shots, shots on target, corners, fouls and cards:** displayed when present in the source; not yet used as independent model predictors.\n"
         "- **Injuries and tactics:** entered manually in this version. The app does not pretend to know unverified team news.\n"
         "- **xG and player-level data:** not yet integrated as a consistent free feed across all six leagues."
