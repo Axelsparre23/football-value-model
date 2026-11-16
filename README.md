@@ -263,3 +263,12 @@ Outputs:
 - `output/chronological_market_2025_summary.csv`
 - `output/chronological_market_2025_bootstrap.csv`
 - `output/chronological_market_selected_models.csv`
+
+
+## Match-analysis improvements
+
+The calculator now shows last-10-match attacking and defensive shot indicators where the source provides them: shots and shots on target created, plus shots and shots on target conceded. These are descriptive matchup indicators, not claims about a coach's exact tactical system and not additional Elo multipliers.
+
+An optional bookmaker benchmark accepts manually entered decimal home/draw/away odds and converts them to proportional no-vig probabilities. It is displayed separately from the model forecast and is never blended into the prediction.
+
+The main 1X2 forecast remains dynamic Elo. The lineup/absence/rest-adjusted Dixon–Coles probabilities are shown as a separate scenario only. Player impact coefficients and rest adjustments have not been validated as 1X2 improvements, so they are not allowed to silently alter the main forecast.
