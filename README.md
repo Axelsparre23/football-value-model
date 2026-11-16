@@ -51,6 +51,23 @@ Lineup and absence information is manual. No automatic injury, suspension, confi
 - This is still one chronological split, not repeated multi-season validation. The model must be tested across several seasons and compared with a no-vig market benchmark before any predictive edge can be claimed.
 - Historical data coverage and statistics availability differ by league. Missing data is displayed as unavailable, not treated as zero.
 
+## 2025 season walk-forward backtest
+
+Run the dedicated season test with:
+
+```bash
+python backtest_2025.py
+```
+
+- European competitions: 2025/26 season (1 August 2025–30 June 2026).
+- Allsvenskan: 2025 calendar season.
+- The app's displayed Elo probabilities are evaluated using pre-match Elo snapshots. No result from the fixture's date is used before that date's predictions.
+- Dixon–Coles is refitted using only results before each match date, with the same half-life and regularisation settings as the app.
+- Where historical odds are present, the no-vig closing market is included as a benchmark. Model-vs-market scores use the exact same odds-covered fixtures.
+- Outputs are written to `output/backtest_2025_predictions.csv` and `output/backtest_2025_summary.csv`.
+
+The test evaluates the core 1X2 models. Historical lineups, injuries and manually entered player ratings are not reconstructed. Do not interpret a positive result on one season as proof of a persistent predictive or financial edge.
+
 ## Run in GitHub Codespaces
 
 ```bash
