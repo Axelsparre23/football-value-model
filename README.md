@@ -243,3 +243,23 @@ python market_movement_significance.py
 ```
 
 This performs paired fixture-level bootstrap resampling (2,000 replicates) to estimate 95% confidence intervals for opening-to-closing Brier and log-loss improvements, overall and by outcome, league and season. Positive values mean closing odds performed better. This quantifies uncertainty; it does not establish betting profitability.
+
+
+## Final chronological market-versus-Elo test
+
+Run:
+
+```bash
+python chronological_market_test.py
+```
+
+This is the final planned research test for this phase. It uses matched fixtures with average opening and closing odds and chronological Elo snapshots. Protocol: train on 2021-2023, select regularisation on 2024, refit on 2021-2024, then evaluate once on the untouched 2025 season. It compares Elo, opening market, closing market, Elo+opening, Elo+closing, and Elo+both market snapshots. Paired confidence intervals use 2,000 league-week cluster bootstrap samples and compare candidates against both Elo and closing market.
+
+All comparisons use the same fixtures with both opening and closing prices; competitions/seasons without adequate odds coverage are naturally excluded. This is a prediction-quality research test, not a profitability test. It does not change the live calculator.
+
+Outputs:
+- `output/chronological_market_all_fixtures.csv`
+- `output/chronological_market_2025_predictions.csv`
+- `output/chronological_market_2025_summary.csv`
+- `output/chronological_market_2025_bootstrap.csv`
+- `output/chronological_market_selected_models.csv`
