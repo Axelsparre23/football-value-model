@@ -158,6 +158,9 @@ def run():
     predictions = pd.DataFrame(prediction_rows)
     if predictions.empty:
         raise RuntimeError("No fixtures could be scored. Check historical data coverage.")
+    for column in ("MarketPHome", "MarketPDraw", "MarketPAway"):
+        if column not in predictions.columns:
+            predictions[column] = np.nan
 
     OUTPUT.mkdir(parents=True, exist_ok=True)
     predictions.to_csv(OUTPUT / "backtest_2025_predictions.csv", index=False)
