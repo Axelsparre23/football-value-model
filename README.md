@@ -33,6 +33,7 @@ Lineup and absence information is manual. No automatic injury, suspension, confi
 - [Football-Data.co.uk](https://www.football-data.co.uk/): historical results for the five major European leagues from 2010/11 onward; detailed statistics vary by league and season.
 - [open-matchday](https://github.com/oladeeayo/open-matchday): current-season results and selected match statistics where upstream providers supply them.
 - [Swedish Football Dataset](https://github.com/Mongosaurusrex/swedish-football-dataset): Allsvenskan historical results, 2011–2025 (CC BY 4.0; attribution: Nathan Dygant).
+- [TopMarx/allsvenskan](https://github.com/TopMarx/allsvenskan): current-season Allsvenskan fixtures and completed scores from the public Fantasy Allsvenskan API mirror; repository is MIT-licensed, while underlying league data remains third-party data.
 
 ## Important limitations
 
