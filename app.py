@@ -108,6 +108,8 @@ with st.expander("Recent form and data-derived team profiles", expanded=True):
                 st.write("Shots: unavailable in source")
             if prof["sot"] is not None:
                 st.write(f"Shots on target per match, last 10: {prof['sot']:.1f}")
+                if prof["shots"] and prof["shots"] > 0:
+                    st.write(f"Shots-on-target rate: {prof['sot']/prof['shots']:.1%}")
             else:
                 st.write("Shots on target: unavailable in source")
             league_shots = profile_data[["HS","AS"]].stack().mean() if {"HS","AS"}.issubset(profile_data.columns) else np.nan
@@ -144,8 +146,8 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         if h_rest is not None and a_rest is not None:
             rest_adjustment = float(np.clip((h_rest-a_rest)*0.012, -0.10, 0.10))
 
-        adj_hg = float(np.clip(base_hg + h_att - h_abs_att + a_abs_def + rest_adjustment, 0.05, 5.5))
-        adj_ag = float(np.clip(base_ag + a_att - a_abs_att + h_abs_def - rest_adjustment, 0.05, 5.5))
+        adj_hg = float(np.clip(base_hg + h_att - h_abs_att - a_def + a_abs_def + rest_adjustment, 0.05, 5.5))
+        adj_ag = float(np.clip(base_ag + a_att - a_abs_att - h_def + h_abs_def - rest_adjustment, 0.05, 5.5))
         # Recalculate goal-model probabilities after explicit player and rest adjustments.
         goals = np.arange(11)
         matrix = np.outer(poisson.pmf(goals, adj_hg), poisson.pmf(goals, adj_ag))
