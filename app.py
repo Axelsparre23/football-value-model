@@ -224,7 +224,7 @@ with st.expander("Advanced: historical model evaluation", expanded=False):
 with st.expander("Data sources and limitations"):
     st.markdown(
         "- **Football-Data.co.uk:** historical results for the five major European leagues, requested from 2010/11 onward. Match-stat coverage varies by league and season.\n"
-        "- **Allsvenskan historical results:** Swedish Football Dataset, 2011–2025 (CC BY 4.0; attribution: Nathan Dygant). Current-season results come from open-matchday.\n"
+        "- **Allsvenskan results:** Swedish Football Dataset, 2011–2025 (CC BY 4.0; attribution: Nathan Dygant), plus current-season completed scores from the public Fantasy Allsvenskan API mirror (TopMarx/allsvenskan; MIT repository license; underlying league data remains third-party data).\n"
         "- **open-matchday:** current-season results and selected statistics where upstream providers supply them.\n"
         "- **Dynamic Elo:** sequentially updated from historical match outcomes; new results change team ratings.\n"
         "- **Player ratings and absences:** manually entered. No automatic injury, suspension, confirmed-lineup or player-rating feed is connected.\n"
