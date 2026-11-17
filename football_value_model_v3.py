@@ -142,12 +142,27 @@ class DixonColesModel:
             lh=np.clip(np.exp(inter+home+attack[hi]-defence[ai]),.03,8)
             la=np.clip(np.exp(inter+attack[ai]-defence[hi]),.03,8)
             ll=lh-target_h*np.log(lh)+la-target_a*np.log(la)
-            # Dixon-Coles low-score dependence correction.
-            for k,(x,y) in enumerate(zip(hg,ag)):
-                if x<=1 and y<=1:
-                    tau=dixon_coles_tau(int(x),int(y),float(lh[k]),float(la[k]),rho)
-                    if tau<=0: return 1e12
-                    ll[k]-=math.log(tau)
+            # Vectorised Dixon-Coles low-score correction. This is mathematically
+            # identical to the per-match loop, but avoids Python work on every
+            # optimiser evaluation (the objective is evaluated many times).
+            low_score = (hg <= 1) & (ag <= 1)
+            if np.any(low_score):
+                x = hg[low_score]
+                y = ag[low_score]
+                low_lh = lh[low_score]
+                low_la = la[low_score]
+                tau = np.ones(len(x), dtype=float)
+                m00 = (x == 0) & (y == 0)
+                m01 = (x == 0) & (y == 1)
+                m10 = (x == 1) & (y == 0)
+                m11 = (x == 1) & (y == 1)
+                tau[m00] = 1.0 - low_lh[m00] * low_la[m00] * rho
+                tau[m01] = 1.0 + low_lh[m01] * rho
+                tau[m10] = 1.0 + low_la[m10] * rho
+                tau[m11] = 1.0 - rho
+                if np.any(tau <= 0):
+                    return 1e12
+                ll[low_score] -= np.log(tau)
             loss=np.sum(w*ll)+self.reg*(np.sum(attack**2)+np.sum(defence**2))+100*(attack.mean()**2+defence.mean()**2)
             loss+=8*rho*rho
             return float(loss)
