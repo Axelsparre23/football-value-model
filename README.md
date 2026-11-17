@@ -26,13 +26,13 @@ Player name | rating from 1 to 10 | position
 
 Examples: `Alex Smith | 7.6 | ST`, `Jordan Jones | 7.2 | CB`. Positions recognised include GK, CB, LB, RB, DF, DM, CM, AM, LM, RM, LW, RW, ST and FW. Ratings are optional, but a line without a rating does not affect the calculated player impact. Enter unavailable players separately using the same format.
 
-Lineup and absence information is manual. No automatic injury, suspension, confirmed-lineup or player-rating feed is connected. Do not treat an expected lineup as confirmed.
+Live confirmed lineups and fixture-level absence records can be loaded from API-Football when configured. Expected lineups are not fabricated; when confirmed XIs have not been released, the app reports them as unavailable.
 
 ## Automatic team-news integration
 
 - Optional provider: [API-Football / API-Sports](https://www.api-football.com/). Its free plan advertises 100 requests/day and endpoints for fixtures, lineups, player statistics and injuries. Free-plan season coverage is restricted and must be checked for each competition/season.
 - Configure `API_FOOTBALL_KEY` as a Codespaces environment variable or in `.streamlit/secrets.toml`. Never commit the key to GitHub.
-- The app searches for the selected home/away fixture around the selected date, then retrieves confirmed lineups, season-average player ratings where available and fixture-level absences. Missing data stays missing; expected lineups are never fabricated.
+- The match screen searches for the selected fixture and retrieves confirmed lineups, fixture-level absence records, available 1X2 bookmaker prices and team-season context. Missing data stays missing; expected lineups are never fabricated. Odds movement is shown only between snapshots observed during the current app session.
 - SofaScore is not scraped: it has no official public API and its terms restrict automated extraction and reuse.
 
 ## Data sources
@@ -276,7 +276,7 @@ The main 1X2 forecast remains dynamic Elo. The lineup/absence/rest-adjusted Dixo
 
 ## Optional live match intelligence module
 
-The new `match_intelligence.py` module adds an API-Football client for the six configured competitions:
+The `match_intelligence.py` provider is integrated into the match screen and supports the six configured competitions:
 
 - Fixture lookup by league, season, date, home team and away team.
 - Fixture-level confirmed lineups, injury/suspension records and bookmaker odds where the provider returns them.
@@ -285,7 +285,7 @@ The new `match_intelligence.py` module adds an API-Football client for the six c
 
 Set `API_FOOTBALL_KEY` as an environment secret. Never commit API credentials. Without a key, the module returns a clear `not_configured` state and does not invent data. Provider coverage and plan limits vary by league, season and endpoint.
 
-**Integration status:** this is a provider/data layer. It is not yet wired into the Streamlit match screen, and its outputs do not change Elo or Dixon–Coles probabilities. Keep it contextual until historical availability can be reconstructed and the feature's incremental value is tested with chronological out-of-sample evaluation.
+**Model status:** these outputs are displayed as context and do not change Elo or Dixon–Coles probabilities. Expected XIs and full historical odds movement are not supplied by this integration. Keep all new inputs contextual until historical availability can be reconstructed and incremental value is tested with chronological out-of-sample evaluation.
 
 Run its unit tests with:
 
