@@ -269,6 +269,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         c2.metric("Draw", f"{final_probs[1]:.1%}")
         c3.metric(labels[2], f"{final_probs[2]:.1%}")
         st.write(f"Rest-adjusted expected goals: **{home} {adj_hg:.2f} – {adj_ag:.2f} {away}**")
+        st.caption(f"Training cutoff: {pre_match_data.Date.max().date()} · all matches on or after {kickoff.isoformat()} are excluded to prevent future-data leakage.")
 
         if market_probs is not None:
             st.markdown("**Bookmaker benchmark (no margin)**")
