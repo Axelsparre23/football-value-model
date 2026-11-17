@@ -1,15 +1,15 @@
 # Prospective 50-match evaluation
 
-This log is maintained in GitHub on the `development` branch. Do not use a separate user spreadsheet.
+This log is maintained in GitHub on the `development` branch. The user sends match information in chat; the assistant updates the log. Do not ask the user to maintain a separate spreadsheet.
 
 ## Rules
-1. Include the next 50 eligible fixtures in chronological order across the six supported competitions (Premier League, La Liga, Bundesliga, Serie A, Ligue 1 and Allsvenskan). Do not select matches because the model shows a large disagreement or a favourable-looking probability.
+1. The user submits the fixtures to be researched. Record every submitted eligible fixture in the order received until 50 unique matches are logged. The supported competitions are Premier League, La Liga, Bundesliga, Serie A, Ligue 1 and Allsvenskan. Because the user chooses which matches to submit, describe the cohort as a user-selected research sample, not a random or fully representative sample of all fixtures.
 2. Freeze each forecast before kickoff. Save the timestamp, model version/commit, Elo H/D/A, Dixon–Coles H/D/A, and bookmaker 1X2 odds/probabilities available at that time.
 3. Use the same match set for every model comparison. Record closing odds separately from the earlier snapshot when available; never substitute post-kickoff prices.
 4. After full time, record the score and outcome. Calculate Brier score and log loss for each probability vector. Accuracy is secondary; do not use it alone.
 5. Keep missing odds, lineups, injuries and statistics explicitly blank/NA. Never treat missing data as zero or infer a lineup.
 6. Do not change model parameters during this 50-match cohort. Any model change starts a separately versioned cohort.
-7. Report results only after 50 eligible matches are complete, while showing interim counts and metrics transparently. This small sample is exploratory and cannot establish a durable edge.
+7. The first review checkpoint is 28 November 2026. On that date, retrieve results for every logged match that has finished and calculate interim metrics; mark any unplayed or unfinished matches as pending. Continue updating the same cohort until all 50 have results. This small, user-selected sample is exploratory and cannot establish a durable edge.
 
 ## Model disagreement investigation
 The app's current forecast is Dynamic Elo. Its Elo distribution is generated from the pre-match rating difference plus a fixed 65-point home advantage and a heuristic draw mapping:
