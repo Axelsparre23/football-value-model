@@ -1,5 +1,6 @@
 """Fast football match calculator: Dixon-Coles + dynamic Elo + transparent team news."""
 from pathlib import Path
+import hashlib
 import os
 import numpy as np
 import pandas as pd
@@ -87,13 +88,21 @@ def load_league(code):
     return download_data(Path("data/cache"), first_start_year=2010, leagues=(code,), refresh_current=True)
 
 @st.cache_resource(show_spinner=False)
-def fit_model(code, signature, data):
+def fit_model(code, signature, _data):
+    # _data is excluded from Streamlit's cache hashing. The compact content
+    # signature below keys the fitted model without repeatedly hashing a
+    # several-thousand-row DataFrame on every rerun.
     half_life = 240 if code == "SWE" else 300
-    return DixonColesModel(half_life=half_life, reg=0.04, xg_weight=0.0).fit(data, pd.Timestamp.now().normalize())
+    return DixonColesModel(half_life=half_life, reg=0.04, xg_weight=0.0).fit(_data, pd.Timestamp.now().normalize())
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def get_elo(data):
-    return elo_history(data)
+def get_elo(signature, _data):
+    return elo_history(_data)
+
+def model_data_signature(code, frame):
+    columns = [c for c in ("Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG", "HomeXG", "AwayXG") if c in frame.columns]
+    row_hashes = pd.util.hash_pandas_object(frame[columns], index=True).values.tobytes()
+    return f"{code}-{hashlib.sha256(row_hashes).hexdigest()[:20]}"
 
 league_code = st.selectbox("League", list(LEAGUES), format_func=lambda x: LEAGUES[x])
 with st.spinner(f"Loading {LEAGUES[league_code]} results and available match statistics..."):
@@ -214,7 +223,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
     try:
         status.caption("1/5 · Preparing match data")
         progress.progress(10, text="Preparing match data...")
-        signature = f"{league_code}-{len(pre_match_data)}-{pre_match_data.Date.max().date() if not pre_match_data.empty else 'no-history'}-{kickoff.isoformat()}"
+        signature = model_data_signature(league_code, pre_match_data)
 
         status.caption("2/5 · Fitting goal model")
         progress.progress(25, text="Fitting goal model...")
@@ -225,7 +234,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
 
         status.caption("3/5 · Calculating team strength")
         progress.progress(48, text="Calculating Elo ratings...")
-        elo_rows, elo_ratings = get_elo(pre_match_data)
+        elo_rows, elo_ratings = get_elo(signature, pre_match_data)
         home_elo = elo_ratings.get(home, 1500.0)
         away_elo = elo_ratings.get(away, 1500.0)
         elo_diff = home_elo + 65.0 - away_elo
