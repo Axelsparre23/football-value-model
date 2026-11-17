@@ -32,7 +32,7 @@ class ChronologicalBacktestTests(unittest.TestCase):
             date = pd.Timestamp("2025-01-01") + pd.Timedelta(days=day)
             for index, (home, away) in enumerate(fixtures):
                 rows.append({
-                    "Date": date, "HomeTeam": home, "AwayTeam": away,
+                    "Date": date, "League": "TEST", "HomeTeam": home, "AwayTeam": away,
                     "FTHG": index % 3, "FTAG": (index + day) % 2,
                 })
         return pd.DataFrame(rows)
