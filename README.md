@@ -292,3 +292,22 @@ Run its unit tests with:
 ```bash
 python -m unittest tests.test_match_intelligence
 ```
+
+
+## Live match information: Highlightly
+
+The optional live match-information panel uses Highlightly. Configure the secret
+`HIGHLIGHTLY_API_KEY` in the Streamlit deployment (or as an environment
+variable locally). The free tier currently documents 100 requests per day and
+supports match data, confirmed lineups, live events and match statistics,
+subject to competition coverage and plan limits.
+
+The free tier does **not** include bookmaker odds. The current integration also
+does not claim to provide verified injuries or suspensions. The app labels
+these sources as plan-restricted or unsupported instead of interpreting missing
+data as evidence that no players are unavailable. Manual bookmaker odds remain
+available in the market benchmark section.
+
+Highlightly data is contextual only and does not alter Elo or Dixon-Coles
+probabilities. No accuracy improvement is claimed until features are evaluated
+using chronological out-of-sample tests.
