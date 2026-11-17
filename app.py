@@ -282,6 +282,40 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             m2.metric("Dynamic Elo H / D / A", f"{final_probs[0]:.1%} / {final_probs[1]:.1%} / {final_probs[2]:.1%}")
             m3.metric("Elo strength difference", f"{elo_diff:+.0f} points")
 
+            diagnostic = pd.DataFrame({
+                "Outcome": [f"{home} win", "Draw", f"{away} win"],
+                "Dynamic Elo": final_probs,
+                "Dixon–Coles": adjusted_dc,
+                "Dixon–Coles minus Elo (pp)": (adjusted_dc-final_probs)*100,
+            })
+            st.dataframe(
+                diagnostic.style.format({
+                    "Dynamic Elo": "{:.1%}",
+                    "Dixon–Coles": "{:.1%}",
+                    "Dixon–Coles minus Elo (pp)": "{:+.1f}",
+                }),
+                hide_index=True, use_container_width=True
+            )
+            st.markdown("**What drives the difference**")
+            st.write(
+                f"**Elo:** {home} rating {home_elo:.0f}; {away} rating {away_elo:.0f}; "
+                f"home advantage +65; effective rating difference {elo_diff:+.0f}. "
+                f"The Elo draw estimate is {draw_probability:.1%}, calculated from the "
+                f"absolute rating difference using the model's fixed draw-decay rule."
+            )
+            st.write(
+                f"**Dixon–Coles:** pre-rest expected goals are {home} {base_hg:.2f} and "
+                f"{away} {base_ag:.2f}; the rest adjustment changes these to "
+                f"{adj_hg:.2f} and {adj_ag:.2f}. The fitted low-score correlation parameter "
+                f"is rho={model.rho:.3f}. These expected goals are converted into a score "
+                f"probability matrix, then summed into home/draw/away probabilities."
+            )
+            st.caption(
+                "The models use different inputs and mathematical structures. The percentage-point "
+                "differences are descriptive, not a causal attribution or proof that either model is better. "
+                "The live forecast remains Elo; Dixon–Coles is an independent cross-check."
+            )
+
         st.markdown("**Why the forecast looks this way: team performance**")
         # Use only matches completed before the selected fixture date.
         home_recent = team_snapshot(pre_match_data, home, 5)
@@ -520,6 +554,6 @@ with st.expander("Data sources and limitations"):
         "- **Dynamic Elo:** sequentially updated from historical match outcomes; new results change team ratings.\n"
         "- **Lineups and availability:** not used as model inputs. The calculator deliberately excludes starting-XI, player-rating, injury and suspension fields.\n"
         "- **Tactical profile:** derived from league position, goals, shots and shots on target when available. Possession, PPDA, xG and detailed tactical events are not consistently available across all six leagues.\n"
-        "- **Backtest:** chronological 80/20 holdout compares Dixon–Coles with the Elo ensemble using Brier score, log loss and accuracy. The blend weight is currently configurable, not learned from a separate calibration set."
+        "- **Backtest:** the in-app research evaluator uses whole match dates in chronological 60/20/20 training, validation and final-test blocks. Blend weight and probability temperatures are selected on validation data only; final-test results are not used for tuning."
     )
 st.caption("Research and analysis only. No bookmaker connection or bet placement. Lineups and unavailable players are excluded. Missing source data is never treated as zero.")
