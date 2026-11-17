@@ -271,9 +271,9 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         if market_probs is not None:
             st.markdown("**Bookmaker benchmark (no margin)**")
             bm1, bm2, bm3 = st.columns(3)
-            bm1.metric(f"{home} market", f"{market_probs[0]:.1%}", f"{(final_probs[0]-market_probs[0])*100:+.1f} pp vs model")
-            bm2.metric("Draw market", f"{market_probs[1]:.1%}", f"{(final_probs[1]-market_probs[1])*100:+.1f} pp vs model")
-            bm3.metric(f"{away} market", f"{market_probs[2]:.1%}", f"{(final_probs[2]-market_probs[2])*100:+.1f} pp vs model")
+            bm1.metric(f"{home} market", f"{market_probs[0]:.1%}", f"{(market_probs[0]-final_probs[0])*100:+.1f} pp market − model")
+            bm2.metric("Draw market", f"{market_probs[1]:.1%}", f"{(market_probs[1]-final_probs[1])*100:+.1f} pp market − model")
+            bm3.metric(f"{away} market", f"{market_probs[2]:.1%}", f"{(market_probs[2]-final_probs[2])*100:+.1f} pp market − model")
             st.caption("Market probabilities are proportional no-vig estimates from the odds you entered. Differences are descriptive, not evidence of value or a profitable edge.")
 
         with st.expander("Advanced: model diagnostics and independent cross-check"):
