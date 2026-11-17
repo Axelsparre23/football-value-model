@@ -29,5 +29,13 @@ args = "streamlit run app.py --server.address 0.0.0.0 --server.port 5000 --serve
 waitForPort = 5000
 
 [[ports]]
+localPort = 3000
+externalPort = 3001
+
+[[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 8501
+externalPort = 3000
