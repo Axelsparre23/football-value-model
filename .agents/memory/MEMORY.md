@@ -1,1 +1,2 @@
 - [Project source branch](project-source-branch.md) — the complete app is on `development`; `main` is intentionally left untouched.
+- [Streamlit preview restart](streamlit-preview-startup.md) — a blank preview immediately after restart may clear once synchronous match-data loading finishes.
