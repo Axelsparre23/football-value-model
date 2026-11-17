@@ -170,6 +170,7 @@ class APIFootballClient:
 
 def _normalise_name(value: str) -> str:
     value = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode()
+    value = value.replace(".", "")
     tokens = re.sub(r"[^a-zA-Z0-9 ]", " ", value).casefold().split()
     ignored = {"fc", "if", "aif", "afc", "cf", "fk", "club"}
     return " ".join(token for token in tokens if token not in ignored)
