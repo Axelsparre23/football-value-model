@@ -160,44 +160,99 @@ def rest_days(data: pd.DataFrame, team: str, kickoff_date):
     return max(0, int((pd.Timestamp(kickoff_date).normalize() - prior.Date.max().normalize()).days))
 
 def backtest_80_20(data: pd.DataFrame, dc_model_class, rho_tau):
-    """Chronological holdout: fit on earliest 80%, evaluate later matches, no future leakage."""
-    from scipy.stats import poisson
-    from scipy.optimize import minimize
-    df = data.sort_values("Date").reset_index(drop=True)
-    cut = max(1, int(len(df)*0.80))
-    train, test = df.iloc[:cut].copy(), df.iloc[cut:].copy()
+    """Date-grouped chronological holdout with strictly pre-date Elo snapshots.
+
+    The 80/20 boundary is selected from unique match dates, never individual
+    rows. Every fixture on a test date is forecast from the same Elo snapshot;
+    ratings are updated only after all fixtures on that date have been scored.
+    Dixon-Coles is fitted once on the training period and remains frozen during
+    the holdout, so no test outcomes enter model fitting.
+    """
+    df = data.copy()
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+    df = df.dropna(subset=["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"])
+    df = df.sort_values(["Date", "HomeTeam", "AwayTeam"]).reset_index(drop=True)
+    match_dates = pd.Index(df["Date"].dt.normalize().drop_duplicates().sort_values())
+    if len(match_dates) < 2:
+        raise ValueError("Need at least two distinct match dates for a chronological holdout.")
+    cut = min(max(1, int(len(match_dates) * 0.80)), len(match_dates) - 1)
+    cutoff_date = pd.Timestamp(match_dates[cut])
+    train = df[df["Date"].dt.normalize() < cutoff_date].copy()
+    test = df[df["Date"].dt.normalize() >= cutoff_date].copy()
     if len(train) < 100 or len(test) < 20:
-        raise ValueError("Need at least 120 completed matches for a useful 80/20 holdout.")
-    model = dc_model_class(half_life=300, reg=0.04, xg_weight=0.0).fit(train, pd.Timestamp(test.Date.min()))
+        raise ValueError("Need at least 120 completed matches across enough distinct dates for an 80/20 holdout.")
+
+    model = dc_model_class(half_life=300, reg=0.04, xg_weight=0.0).fit(
+        train, cutoff_date
+    )
     _, final_ratings = elo_history(train)
-    elo_records, elo_ratings = elo_history(train)
-    # Continue Elo updates through test only after each match is scored.
     elo_current = dict(final_ratings)
-    dc_rows=[]; blend_rows=[]; actuals=[]
-    for _, m in test.iterrows():
-        h,a=m.HomeTeam,m.AwayTeam
-        diff=elo_current.get(h,1500.0)+65.0-elo_current.get(a,1500.0)
-        try: dc,_=model.probabilities(h,a)
-        except KeyError: continue
-        ep=elo_probabilities(diff)
-        bp=blended_probabilities(dc,ep)
-        actual=0 if m.FTHG>m.FTAG else (1 if m.FTHG==m.FTAG else 2)
-        dc_rows.append(dc); blend_rows.append(bp); actuals.append(actual)
-        # Update ratings only after the outcome has been predicted.
-        rh,ra=elo_current.get(h,1500.0),elo_current.get(a,1500.0)
-        exp=1/(1+10**(-diff/400))
-        result=1.0 if actual==0 else (0.5 if actual==1 else 0.0)
-        margin=abs(int(m.FTHG)-int(m.FTAG))
-        mult=math.log1p(margin)*(2.2/(2.2+0.001*abs(rh-ra))) if margin else 1.0
-        change=22.0*mult*(result-exp)
-        elo_current[h]=rh+change; elo_current[a]=ra-change
+    dc_rows, blend_rows, actuals, prediction_rows = [], [], [], []
+
+    for match_date, day in test.groupby(test["Date"].dt.normalize(), sort=True):
+        # Snapshot all ratings before scoring this entire date.
+        day_predictions = []
+        day_updates = []
+        for _, match in day.iterrows():
+            home, away = str(match.HomeTeam), str(match.AwayTeam)
+            rating_home = elo_current.get(home, 1500.0)
+            rating_away = elo_current.get(away, 1500.0)
+            diff = rating_home + 65.0 - rating_away
+            try:
+                dc, _ = model.probabilities(home, away)
+            except KeyError:
+                continue
+            elo_p = elo_probabilities(diff)
+            blend_p = blended_probabilities(dc, elo_p)
+            actual = 0 if match.FTHG > match.FTAG else (1 if match.FTHG == match.FTAG else 2)
+            dc_rows.append(dc)
+            blend_rows.append(blend_p)
+            actuals.append(actual)
+            day_predictions.append({
+                "date": pd.Timestamp(match_date).date().isoformat(),
+                "home_team": home, "away_team": away,
+                "elo_diff": float(diff),
+                "elo_home": float(elo_p[0]), "elo_draw": float(elo_p[1]),
+                "elo_away": float(elo_p[2]),
+            })
+
+            expected = 1.0 / (1.0 + 10.0 ** (-diff / 400.0))
+            result = 1.0 if actual == 0 else (0.5 if actual == 1 else 0.0)
+            margin = abs(int(match.FTHG) - int(match.FTAG))
+            multiplier = (
+                math.log1p(margin) *
+                (2.2 / (2.2 + 0.001 * abs(rating_home - rating_away)))
+                if margin else 1.0
+            )
+            change = 22.0 * multiplier * (result - expected)
+            day_updates.append((home, away, change))
+
+        prediction_rows.extend(day_predictions)
+        # Apply the day's results only after every fixture on that date is forecast.
+        for home, away, change in day_updates:
+            elo_current[home] = elo_current.get(home, 1500.0) + change
+            elo_current[away] = elo_current.get(away, 1500.0) - change
+
     if not actuals:
         raise ValueError("No holdout fixtures could be scored; teams may be missing from training data.")
-    y=np.asarray(actuals,dtype=int); onehot=np.eye(3)[y]
+    y = np.asarray(actuals, dtype=int)
+    onehot = np.eye(3)[y]
+
     def metrics(rows):
-        p=np.clip(np.asarray(rows),1e-8,1)
-        return {"Brier":float(np.mean(np.sum((p-onehot)**2,axis=1))),
-                "Log loss":float(-np.mean(np.log(p[np.arange(len(y)),y]))),
-                "Accuracy":float(np.mean(p.argmax(axis=1)==y)), "Matches":len(y)}
-    return {"cutoff":str(test.Date.min().date()), "train_matches":len(train), "test_matches":len(y),
-            "dixon_coles":metrics(dc_rows), "elo_ensemble":metrics(blend_rows)}
+        p = np.clip(np.asarray(rows, dtype=float), 1e-8, 1.0)
+        p = p / p.sum(axis=1, keepdims=True)
+        return {
+            "Brier": float(np.mean(np.sum((p - onehot) ** 2, axis=1))),
+            "Log loss": float(-np.mean(np.log(p[np.arange(len(y)), y]))),
+            "Accuracy": float(np.mean(p.argmax(axis=1) == y)),
+            "Matches": int(len(y)),
+        }
+
+    return {
+        "cutoff": cutoff_date.date().isoformat(),
+        "train_matches": len(train),
+        "test_matches": len(y),
+        "dixon_coles": metrics(dc_rows),
+        "elo_ensemble": metrics(blend_rows),
+        "predictions": prediction_rows,
+    }
