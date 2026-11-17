@@ -12,7 +12,7 @@ from advanced_model import elo_history, elo_probabilities, team_profile, rest_da
 
 from model_research import chronological_ensemble_evaluation
 from match_intelligence import (
-    APIFootballClient, unavailable_result,
+    HighlightlyClient, unavailable_result,
     extract_1x2_odds, compare_odds_snapshots,
 )
 
@@ -49,20 +49,20 @@ st.markdown('<div class="match-hero"><div class="match-kicker">Match intelligenc
 
 
 def get_api_football_key():
-    key = os.getenv("API_FOOTBALL_KEY", "").strip()
+    key = os.getenv("HIGHLIGHTLY_API_KEY", "").strip()
     if key:
         return key
     try:
-        return str(st.secrets.get("API_FOOTBALL_KEY", "")).strip()
+        return str(st.secrets.get("HIGHLIGHTLY_API_KEY", "")).strip()
     except Exception:
         return ""
 
 
 @st.cache_data(ttl=900, show_spinner=False)
 def load_live_match_information(code, season, match_date, home_team, away_team, api_key):
-    client = APIFootballClient(api_key=api_key)
+    client = HighlightlyClient(api_key=api_key)
     if not client.configured:
-        return unavailable_result("API_FOOTBALL_KEY is not configured.")
+        return unavailable_result("HIGHLIGHTLY_API_KEY is not configured.")
     fixture = client.find_fixture(code, season, match_date, home_team, away_team)
     if not fixture:
         return {
@@ -366,10 +366,10 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         with st.expander("Match information: lineups, availability and market", expanded=False):
             api_key = get_api_football_key()
             if not api_key:
-                st.info("Live match information is not connected. Add API_FOOTBALL_KEY as a secret to enable the provider. No sample data is shown.")
+                st.info("Live match information is not connected. Add HIGHLIGHTLY_API_KEY as a secret to enable the provider. No sample data is shown.")
             else:
                 season = kickoff.year if league_code == "SWE" or kickoff.month >= 7 else kickoff.year - 1
-                with st.spinner("Checking provider fixture, lineups, absences and market prices..."):
+                with st.spinner("Checking Highlightly fixture, confirmed lineups and live match events..."):
                     live = load_live_match_information(
                         league_code, season, kickoff.isoformat(), home, away, api_key
                     )
@@ -379,7 +379,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                     st.info("The live provider is not configured.")
                 else:
                     st.caption(
-                        f"Source: API-Football · retrieved {live.get('fetched_at', 'timestamp unavailable')} · "
+                        f"Source: Highlightly · retrieved {live.get('fetched_at', 'timestamp unavailable')} · "
                         "provider coverage can vary by competition and subscription."
                     )
                     if live.get("sources"):
@@ -414,6 +414,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                     st.caption("The provider supplies confirmed lineups when released; it does not supply a reliable expected XI here.")
 
                     st.markdown("**Injuries and suspensions**")
+                    absence_source = (live.get("sources") or {}).get("absences", {})
                     absences = live.get("absences") or []
                     absence_rows = []
                     for item in absences:
@@ -428,15 +429,32 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                             })
                     if absence_rows:
                         st.dataframe(pd.DataFrame(absence_rows), hide_index=True, use_container_width=True)
+                    elif absence_source.get("status") == "not_supported":
+                        st.caption("Highlightly's documented integration does not provide a verified injury/suspension feed. No absence data is inferred.")
                     else:
                         st.caption("No absence records returned. This does not establish that both squads are injury-free.")
+
+                    st.markdown("**Live match events**")
+                    events = live.get("events") or []
+                    if events:
+                        event_rows = [
+                            {"Minute": event.get("time", ""),
+                             "Event": event.get("type", ""),
+                             "Team": (event.get("team") or {}).get("name", ""),
+                             "Player": event.get("player", ""),
+                             "Assist / substituted": event.get("assist") or event.get("substituted") or ""}
+                            for event in events
+                        ]
+                        st.dataframe(pd.DataFrame(event_rows), hide_index=True, use_container_width=True)
+                    else:
+                        st.caption("No live events returned. Events are updated during matches.")
 
                     st.markdown("**Bookmaker odds and observed movement**")
                     current_odds = extract_1x2_odds(live.get("odds") or [])
                     if current_odds:
                         st.dataframe(pd.DataFrame(current_odds), hide_index=True, use_container_width=True)
                         fixture_id = live.get("fixture_id")
-                        snapshot_key = f"api_football_odds_{fixture_id}"
+                        snapshot_key = f"highlightly_odds_{fixture_id}"
                         previous_odds = st.session_state.get(snapshot_key, [])
                         movement = compare_odds_snapshots(previous_odds, current_odds)
                         if movement:
@@ -446,6 +464,8 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                             st.caption("A first odds snapshot is stored for this session. Movement will appear after a later refresh if prices change.")
                         st.session_state[snapshot_key] = current_odds
                         st.caption("Movement is measured only between snapshots observed in this active app session; it is not a complete historical odds feed.")
+                    elif (live.get("sources") or {}).get("odds", {}).get("status") == "plan_restricted":
+                        st.caption("Bookmaker odds are not included in Highlightly's free tier. Use the manual bookmaker benchmark above, or upgrade the provider plan.")
                     else:
                         st.caption("No usable 1X2 bookmaker prices were returned for this fixture.")
 
