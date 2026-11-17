@@ -5,6 +5,8 @@ from match_intelligence import (
     APIFootballClient,
     APIFootballError,
     LEAGUE_IDS,
+    compare_odds_snapshots,
+    extract_1x2_odds,
     _normalise_name,
     unavailable_result,
 )
@@ -46,6 +48,29 @@ class MatchIntelligenceTests(unittest.TestCase):
         )
         self.assertEqual(found["fixture"]["id"], 123)
         client._get.assert_called_once()
+
+
+    def test_extract_and_compare_bookmaker_odds(self):
+        records = [{
+            "update": "2026-11-17T14:00:00+00:00",
+            "bookmakers": [{
+                "name": "Example Bookmaker",
+                "bets": [{
+                    "name": "Match Winner",
+                    "values": [
+                        {"value": "Home", "odd": "2.0"},
+                        {"value": "Draw", "odd": "3.2"},
+                        {"value": "Away", "odd": "3.8"},
+                    ],
+                }],
+            }],
+        }]
+        current = extract_1x2_odds(records)
+        self.assertEqual(len(current), 1)
+        previous = [{"bookmaker": "Example Bookmaker", "home": 2.1, "draw": 3.2, "away": 3.7}]
+        movement = compare_odds_snapshots(previous, current)
+        self.assertEqual(movement[0]["home"], -0.1)
+        self.assertEqual(movement[0]["away"], 0.1)
 
     def test_unknown_league_is_rejected(self):
         client = APIFootballClient(api_key="test-key")
