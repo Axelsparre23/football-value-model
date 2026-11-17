@@ -306,11 +306,13 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                 f"The Elo draw estimate is {draw_probability:.1%}, calculated from the "
                 f"absolute rating difference using the model's fixed draw-decay rule."
             )
+            rho_value = getattr(model, "rho", None)
+            rho_text = f"{float(rho_value):.3f}" if rho_value is not None and np.isfinite(float(rho_value)) else "unavailable"
             st.write(
                 f"**Dixon–Coles:** pre-rest expected goals are {home} {base_hg:.2f} and "
                 f"{away} {base_ag:.2f}; the rest adjustment changes these to "
                 f"{adj_hg:.2f} and {adj_ag:.2f}. The fitted low-score correlation parameter "
-                f"is rho={model.rho:.3f}. These expected goals are converted into a score "
+                f"is rho={rho_text}. These expected goals are converted into a score "
                 f"probability matrix, then summed into home/draw/away probabilities."
             )
             st.caption(
@@ -356,11 +358,13 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             f"{away} averages {away_gf10} scored and {away_ga10} conceded."
         )
         if home_profile["shots"] is not None and away_profile["shots"] is not None:
+            home_sot = f"{home_profile['sot']:.1f}" if home_profile["sot"] is not None else "unavailable"
+            away_sot = f"{away_profile['sot']:.1f}" if away_profile["sot"] is not None else "unavailable"
             st.write(
                 f"**Chance volume:** {home} averages {home_profile['shots']:.1f} shots "
-                f"({home_profile['sot']:.1f} on target) per match in its latest ten available matches; "
+                f"({home_sot} on target) per match in its latest ten available matches; "
                 f"{away} averages {away_profile['shots']:.1f} "
-                f"({away_profile['sot']:.1f} on target)."
+                f"({away_sot} on target)."
             )
         else:
             st.caption("Shot statistics are incomplete for at least one team, so they are not used in this comparison.")
