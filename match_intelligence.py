@@ -1,4 +1,4 @@
-"""Highlightly match intelligence integration.
+"""Highlightly match intelligence integration (deployment sync revision).
 
 The provider supplies fixtures, confirmed lineups and live match events.
 The free tier does not include bookmaker odds; this module marks odds and
