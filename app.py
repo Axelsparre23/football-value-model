@@ -7,13 +7,9 @@ from scipy.stats import poisson
 
 from data_manager import download_data, LEAGUES
 from football_value_model_v3 import DixonColesModel, dixon_coles_tau
-from advanced_model import (
-    elo_history, elo_probabilities, blended_probabilities, parse_player_lines,
-    player_impact, absence_impact, team_profile, rest_days,
-)
+from advanced_model import elo_history, elo_probabilities, team_profile, rest_days
 
 from model_research import chronological_ensemble_evaluation
-from team_news import fetch_fixture_team_news, get_api_football_key
 
 st.set_page_config(page_title="Match Analysis", page_icon=":soccer:", layout="wide")
 
@@ -59,10 +55,6 @@ def fit_model(code, signature, data):
 def get_elo(data):
     return elo_history(data)
 
-@st.cache_data(ttl=3600, show_spinner=False)
-def cached_team_news(api_key, code, home_team, away_team, match_date):
-    return fetch_fixture_team_news(api_key, code, home_team, away_team, match_date)
-
 league_code = st.selectbox("League", list(LEAGUES), format_func=lambda x: LEAGUES[x])
 with st.spinner(f"Loading {LEAGUES[league_code]} results and available match statistics..."):
     try:
@@ -97,73 +89,6 @@ with st.expander("Match date", expanded=False):
     default_kickoff = max((latest_date + pd.Timedelta(days=1)).date(),
                           (pd.Timestamp.now().normalize() + pd.Timedelta(days=1)).date())
     kickoff = st.date_input("Expected match date", value=default_kickoff, min_value=latest_date.date())
-
-lookup_selection = f"{league_code}|{home}|{away}|{kickoff.isoformat()}"
-if st.session_state.get("api_news_selection") != lookup_selection:
-    if st.session_state.get("api_news_selection") is not None:
-        for k in ("hxi","axi","habs","aabs"):
-            st.session_state[k] = ""
-        for k,v in (("hs","Not entered"),("as","Not entered"),("hf","Other / unknown"),("af","Other / unknown")):
-            st.session_state[k] = v
-        st.session_state.pop("api_news_result", None)
-    st.session_state["api_news_selection"] = lookup_selection
-
-api_key = get_api_football_key(st)
-with st.expander("Automatic team news (free API-Football)", expanded=False):
-    st.caption("Optional lookup for confirmed starting XIs, season-average player ratings where available, and reported injuries/suspensions.")
-    if not api_key:
-        st.info("Create a free API-Football key, then add API_FOOTBALL_KEY to your Codespaces environment or .streamlit/secrets.toml. Never commit the key to GitHub.")
-        st.markdown("[Create a free API-Football account](https://dashboard.api-football.com/register)")
-    if st.button("Fetch fixture lineups, ratings and absences", key="fetch_team_news", disabled=not bool(api_key)):
-        try:
-            with st.spinner("Looking up the selected fixture..."):
-                news = cached_team_news(api_key, league_code, home, away, kickoff)
-            for k in ("hxi","axi","habs","aabs"): st.session_state[k] = ""
-            for k,v in (("hs","Not entered"),("as","Not entered"),("hf","Other / unknown"),("af","Other / unknown")):
-                st.session_state[k]=v
-            for prefix,item in (("h",news["home"]),("a",news["away"])):
-                if item["xi"]:
-                    st.session_state[prefix+"xi"]=item["xi"]
-                    st.session_state[prefix+"s"]="Confirmed" if item["count"] == 11 else "Partial / incomplete"
-                    st.session_state[prefix+"f"]=item["formation"] if item["formation"] in ["4-3-3","4-2-3-1","4-4-2","3-5-2","3-4-3","4-1-4-1"] else "Other / unknown"
-                st.session_state[prefix+"abs"]=item["abs"]
-            st.session_state["api_news_result"]=news
-            st.session_state["api_news_selection"]=lookup_selection
-            st.rerun()
-        except Exception as exc:
-            st.error(f"Team-news lookup failed: {exc}")
-    if st.session_state.get("api_news_result"):
-        news=st.session_state["api_news_result"]
-        st.write(f"Fixture: **{news['home_name']} vs {news['away_name']}** · {news['kickoff']} · {news['status']}")
-        st.write(f"Starting XI players returned: {news['home']['count']}/11 home, {news['away']['count']}/11 away.")
-        st.write(f"Reported absences: {len(news['home']['abs'].splitlines())} home, {len(news['away']['abs'].splitlines())} away.")
-        if news["questionable"]: st.warning("Questionable, not treated as confirmed absences: "+"; ".join(news["questionable"]))
-        if not news["home"]["xi"] and not news["away"]["xi"]:
-            st.info("Confirmed lineups are not published yet or are unavailable for this fixture. Enter lineups manually.")
-        st.caption("Ratings are current-season averages where available, not predicted match ratings.")
-
-with st.expander("Optional: lineups and unavailable players", expanded=False):
-    st.caption("Manual inputs remain available. Enter one player per line: Name | rating (1–10) | position. Automatic data is only filled when the provider returns it.")
-    l1, l2 = st.columns(2)
-    with l1:
-        st.markdown(f"**{home}**")
-        home_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Partial / incomplete", "Confirmed"], key="hs")
-        home_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="hf")
-        home_xi_raw = st.text_area("Starting XI — player | rating | position", height=120, key="hxi",
-                                   placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
-        home_abs_raw = st.text_area("Unavailable players — player | rating | position", height=80, key="habs",
-                                    placeholder="Starting striker | 7.8 | ST")
-    with l2:
-        st.markdown(f"**{away}**")
-        away_status = st.selectbox("Lineup status", ["Not entered", "Expected", "Partial / incomplete", "Confirmed"], key="as")
-        away_formation = st.selectbox("Formation", ["4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "3-4-3", "4-1-4-1", "Other / unknown"], key="af")
-        away_xi_raw = st.text_area("Starting XI — player | rating | position", height=120, key="axi",
-                                   placeholder="Goalkeeper | 7.0 | GK\nCentre-back | 7.2 | CB\nStriker | 8.1 | ST")
-        away_abs_raw = st.text_area("Unavailable players — player | rating | position", height=80, key="aabs",
-                                    placeholder="Starting centre-back | 7.5 | CB")
-
-home_xi, away_xi = parse_player_lines(home_xi_raw if "home_xi_raw" in locals() else ""), parse_player_lines(away_xi_raw if "away_xi_raw" in locals() else "")
-home_abs, away_abs = parse_player_lines(home_abs_raw if "home_abs_raw" in locals() else ""), parse_player_lines(away_abs_raw if "away_abs_raw" in locals() else "")
 
 with st.expander("Optional: bookmaker probability benchmark", expanded=False):
     st.caption("Enter decimal 1X2 odds to compare the model with a no-margin market estimate. This is a comparison only; market odds are not blended into the prediction.")
@@ -231,38 +156,58 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
     if home == away:
         st.error("Choose two different teams.")
         st.stop()
+
+    progress_area = st.container()
+    progress = progress_area.progress(1, text="Starting prediction...")
+    status = progress_area.empty()
     try:
+        status.caption("1/5 · Preparing match data")
+        progress.progress(10, text="Preparing match data...")
         signature = f"{league_code}-{len(data)}-{latest_date.date()}"
+
+        status.caption("2/5 · Fitting goal model")
+        progress.progress(25, text="Fitting goal model...")
         model = fit_model(league_code, signature, data)
         dc_probs, (base_hg, base_ag) = model.probabilities(home, away)
-        elo_rows, elo_ratings = get_elo(data)
-        elo_diff = elo_ratings.get(home, 1500.0) + 65.0 - elo_ratings.get(away, 1500.0)
-        ep = elo_probabilities(elo_diff)
 
-        h_att, h_def, h_known = player_impact(home_xi)
-        a_att, a_def, a_known = player_impact(away_xi)
-        h_abs_att, h_abs_def = absence_impact(home_abs)
-        a_abs_att, a_abs_def = absence_impact(away_abs)
+        status.caption("3/5 · Calculating team strength")
+        progress.progress(48, text="Calculating Elo ratings...")
+        elo_rows, elo_ratings = get_elo(data)
+        home_elo = elo_ratings.get(home, 1500.0)
+        away_elo = elo_ratings.get(away, 1500.0)
+        elo_diff = home_elo + 65.0 - away_elo
+        final_probs = elo_probabilities(elo_diff)
+
+        status.caption("4/5 · Checking match context")
+        progress.progress(70, text="Checking rest days and match context...")
         h_rest = rest_days(data, home, kickoff)
         a_rest = rest_days(data, away, kickoff)
         rest_adjustment = 0.0
         if h_rest is not None and a_rest is not None:
             rest_adjustment = float(np.clip((h_rest-a_rest)*0.012, -0.10, 0.10))
-
-        adj_hg = float(np.clip(base_hg + h_att - h_abs_att - a_def + a_abs_def + rest_adjustment, 0.05, 5.5))
-        adj_ag = float(np.clip(base_ag + a_att - a_abs_att - h_def + h_abs_def - rest_adjustment, 0.05, 5.5))
-        # Recalculate goal-model probabilities after explicit player and rest adjustments.
+        adj_hg = float(np.clip(base_hg + rest_adjustment, 0.05, 5.5))
+        adj_ag = float(np.clip(base_ag - rest_adjustment, 0.05, 5.5))
         goals = np.arange(11)
         matrix = np.outer(poisson.pmf(goals, adj_hg), poisson.pmf(goals, adj_ag))
         for x in range(2):
             for y in range(2):
                 matrix[x,y] *= dixon_coles_tau(x,y,adj_hg,adj_ag,model.rho)
-        matrix = np.maximum(matrix, 0); matrix /= matrix.sum()
+        matrix = np.maximum(matrix, 0)
+        matrix /= matrix.sum()
         adjusted_dc = np.array([np.tril(matrix,-1).sum(), np.trace(matrix), np.triu(matrix,1).sum()])
-        # Elo is the current default because it outperformed DC and the blend in the available Allsvenskan holdout. DC remains an independent cross-check pending validation in all leagues.
-        final_probs = ep
+
+        status.caption("5/5 · Preparing explanation and results")
+        progress.progress(90, text="Preparing prediction...")
         labels = [f"{home} win", "Draw", f"{away} win"]
         best = int(np.argmax(final_probs))
+        elo_expected_home = 1.0 / (1.0 + 10.0 ** (-elo_diff / 400.0))
+        draw_probability = float(np.clip(0.265 * np.exp(-abs(elo_diff) / 650.0), 0.12, 0.30))
+        home_conditional = elo_expected_home
+        away_conditional = 1.0 - elo_expected_home
+        decisive_probability = 1.0 - draw_probability
+
+        progress.progress(100, text="Prediction complete")
+        status.empty()
 
         st.divider()
         st.markdown(f'<div class="match-hero"><div class="match-kicker">Model selection · Dynamic Elo</div><h2 style="margin:.3rem 0">{labels[best]}</h2><div style="font-size:2rem;font-weight:750;color:#176b4a">{final_probs[best]:.1%}</div><div class="match-sub">Highest estimated outcome probability · not a certainty</div></div>', unsafe_allow_html=True)
@@ -270,7 +215,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         c1.metric(labels[0], f"{final_probs[0]:.1%}")
         c2.metric("Draw", f"{final_probs[1]:.1%}")
         c3.metric(labels[2], f"{final_probs[2]:.1%}")
-        st.write(f"Adjusted expected goals: **{home} {adj_hg:.2f} – {adj_ag:.2f} {away}**")
+        st.write(f"Rest-adjusted expected goals: **{home} {adj_hg:.2f} – {adj_ag:.2f} {away}**")
 
         if market_probs is not None:
             st.markdown("**Bookmaker benchmark (no margin)**")
@@ -282,24 +227,47 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
 
         st.markdown("**Independent model cross-check**")
         m1,m2,m3 = st.columns(3)
-        m1.metric("Lineup-adjusted DC H / D / A", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
-        m2.metric("Elo home / draw / away", f"{ep[0]:.1%} / {ep[1]:.1%} / {ep[2]:.1%}")
-        m3.metric("Elo strength difference", f"{elo_diff:+.0f}")
+        m1.metric("Rest-adjusted Dixon–Coles H / D / A", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
+        m2.metric("Dynamic Elo H / D / A", f"{final_probs[0]:.1%} / {final_probs[1]:.1%} / {final_probs[2]:.1%}")
+        m3.metric("Elo strength difference", f"{elo_diff:+.0f} points")
 
-        st.markdown("**Player and match impact**")
-        st.write(f"{home}: {h_known} rated starters entered; {len(home_abs)} unavailable players entered. {away}: {a_known} rated starters entered; {len(away_abs)} unavailable players entered.")
-        st.write(f"Attack xG adjustment: {home} {h_att-h_abs_att:+.2f}; {away} {a_att-a_abs_att:+.2f}. Defensive quality: {home} {h_def:+.2f}, {away} {a_def:+.2f}; unavailable defenders weaken the respective defence by {h_abs_def:.2f} and {a_abs_def:.2f} xG.")
-        st.write(f"Rest days before {kickoff}: {home} {h_rest if h_rest is not None else 'unknown'}, {away} {a_rest if a_rest is not None else 'unknown'}. Applied home xG adjustment: {rest_adjustment:+.2f}.")
-        for team, xi, status, formation in [(home,home_xi,home_status,home_formation),(away,away_xi,away_status,away_formation)]:
-            st.caption(f"{team}: {status} lineup · {formation} · {len(xi)} players entered" + (f" · WARNING: expected 11, received {len(xi)}" if xi and len(xi)!=11 else ""))
-
-        st.markdown("**Why the model leans this way**")
-        st.write("The main 1X2 forecast remains the independently tested dynamic Elo baseline. The Dixon–Coles figure is a separate goal-model scenario; entered player ratings, absences and rest days change this scenario, not the main Elo probabilities.")
-        st.write(f"Pre-match Elo: {home} {elo_ratings.get(home,1500.0):.0f} vs {away} {elo_ratings.get(away,1500.0):.0f}, including a 65-point home advantage.")
-        st.write(f"Recent form and the last-10-match shot profile provide context. They are not added as unvalidated multipliers to Elo.")
-        st.caption("Player-impact coefficients and rest-day adjustments remain experimental. The lineup-adjusted Dixon–Coles scenario is informative, not a validated replacement forecast.")
-        st.caption("Probabilities are estimates, not certainty. A 60% outcome still fails roughly 4 times in 10 under a perfectly calibrated model.")
+        st.markdown("**Why each probability has this value**")
+        st.write(
+            f"The model first compares the teams' Elo ratings. {home} has an Elo rating of {home_elo:.0f}; "
+            f"{away} has {away_elo:.0f}. The model adds a fixed 65-point home advantage, giving "
+            f"{home} an effective pre-match Elo difference of {elo_diff:+.0f}."
+        )
+        st.write(
+            f"That difference is converted to a decisive-result split using the Elo logistic formula: "
+            f"before allowing for draws, the home side's share is {home_conditional:.1%} and the away side's "
+            f"share is {away_conditional:.1%}. The model separately estimates the draw probability as "
+            f"{draw_probability:.1%}, decreasing it as the teams' Elo gap grows."
+        )
+        st.write(
+            f"After reserving {draw_probability:.1%} for a draw, the remaining {decisive_probability:.1%} "
+            f"is divided between the teams. This produces {home} win {final_probs[0]:.1%}, "
+            f"draw {final_probs[1]:.1%}, and {away} win {final_probs[2]:.1%}. "
+            f"The three probabilities sum to 100%."
+        )
+        st.caption(
+            "The main 1X2 forecast is dynamic Elo. It uses historical results, sequential rating updates, "
+            "a 65-point home advantage and a draw adjustment based on rating difference. "
+            "Recent form and shot statistics are shown as context, not added as unvalidated probability multipliers."
+        )
+        st.write(
+            f"The independent Dixon–Coles goal model gives a separate check of "
+            f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%} "
+            f"for home win / draw / away win. Its expected-goal estimates are adjusted only for rest-day "
+            f"difference here: {home} has {h_rest if h_rest is not None else 'unknown'} rest days and "
+            f"{away} has {a_rest if a_rest is not None else 'unknown'}. The applied home expected-goals "
+            f"adjustment is {rest_adjustment:+.2f}."
+        )
+        st.caption(
+            "A 60% probability does not mean a guaranteed result: even with perfect calibration, "
+            "that outcome would fail about 4 times in 10. These are estimates, not certainty."
+        )
     except Exception as exc:
+        progress_area.empty()
         st.error(f"Prediction failed: {exc}")
 
 with st.expander("Advanced: historical model evaluation", expanded=False):
@@ -330,8 +298,8 @@ with st.expander("Data sources and limitations"):
         "- **Allsvenskan results:** Swedish Football Dataset, 2011–2025 (CC BY 4.0; attribution: Nathan Dygant), plus current-season completed scores from the public Fantasy Allsvenskan API mirror (TopMarx/allsvenskan; MIT repository license; underlying league data remains third-party data).\n"
         "- **open-matchday:** current-season results and selected statistics where upstream providers supply them.\n"
         "- **Dynamic Elo:** sequentially updated from historical match outcomes; new results change team ratings.\n"
-        "- **Player ratings and absences:** manually entered. No automatic injury, suspension, confirmed-lineup or player-rating feed is connected.\n"
+        "- **Lineups and availability:** not used as model inputs. The calculator deliberately excludes starting-XI, player-rating, injury and suspension fields.\n"
         "- **Tactical profile:** derived from league position, goals, shots and shots on target when available. Possession, PPDA, xG and detailed tactical events are not consistently available across all six leagues.\n"
         "- **Backtest:** chronological 80/20 holdout compares Dixon–Coles with the Elo ensemble using Brier score, log loss and accuracy. The blend weight is currently configurable, not learned from a separate calibration set."
     )
-st.caption("Research and analysis only. No bookmaker connection or bet placement. Missing source data is never treated as zero.")
+st.caption("Research and analysis only. No bookmaker connection or bet placement. Lineups and unavailable players are excluded. Missing source data is never treated as zero.")
