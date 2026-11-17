@@ -18,5 +18,7 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
+      - name: Compile application and model modules
+        run: python -m py_compile app.py model_research.py advanced_model.py match_intelligence.py
       - name: Run match intelligence tests
         run: python -m unittest tests.test_match_intelligence
