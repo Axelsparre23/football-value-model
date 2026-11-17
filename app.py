@@ -48,7 +48,7 @@ hr { border-color:var(--line); }
 st.markdown('<div class="match-hero"><div class="match-kicker">Match intelligence · Research edition</div><h1 style="margin:.25rem 0 0">Match analysis</h1><div class="match-sub">Probability estimates, team context and model diagnostics across six leagues.</div></div>', unsafe_allow_html=True)
 
 
-def get_api_football_key():
+def get_highlightly_key():
     key = os.getenv("HIGHLIGHTLY_API_KEY", "").strip()
     if key:
         return key
@@ -71,7 +71,7 @@ def load_live_match_information(code, season, match_date, home_team, away_team, 
             "lineups": [], "absences": [], "odds": [], "team_statistics": [],
             "sources": {},
         }
-    fixture_id = (fixture.get("fixture") or {}).get("id")
+    fixture_id = fixture.get("id")
     if not fixture_id:
         return {
             "overall_status": "no_fixture",
@@ -364,7 +364,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         )
 
         with st.expander("Match information: lineups, availability and market", expanded=False):
-            api_key = get_api_football_key()
+            api_key = get_highlightly_key()
             if not api_key:
                 st.info("Live match information is not connected. Add HIGHLIGHTLY_API_KEY as a secret to enable the provider. No sample data is shown.")
             else:
