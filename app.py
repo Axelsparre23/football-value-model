@@ -525,7 +525,7 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         st.error(f"Prediction failed: {exc}")
 
 with st.expander("Advanced: historical model evaluation", expanded=False):
-    st.write("Uses whole match dates in chronological order: 60% training, 20% validation and 20% final test. The blend weight and calibration temperature are selected on validation data only; the final block is kept separate.")
+    st.write("Uses whole match dates in chronological order, split approximately 60% / 20% / 20% by distinct match dates (not exact match counts). The blend weight and probability-calibration temperatures are selected on validation data only; the final block is kept separate.")
     if st.button("Run research evaluation"):
         try:
             with st.spinner("Fitting Dixon–Coles, tuning the blend on validation data, and scoring the untouched test period..."):
