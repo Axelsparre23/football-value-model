@@ -272,3 +272,23 @@ The calculator now shows last-10-match attacking and defensive shot indicators w
 An optional bookmaker benchmark accepts manually entered decimal home/draw/away odds and converts them to proportional no-vig probabilities. It is displayed separately from the model forecast and is never blended into the prediction.
 
 The main 1X2 forecast remains dynamic Elo. The lineup/absence/rest-adjusted Dixon–Coles probabilities are shown as a separate scenario only. Player impact coefficients and rest adjustments have not been validated as 1X2 improvements, so they are not allowed to silently alter the main forecast.
+
+
+## Optional live match intelligence module
+
+The new `match_intelligence.py` module adds an API-Football client for the six configured competitions:
+
+- Fixture lookup by league, season, date, home team and away team.
+- Fixture-level confirmed lineups, injury/suspension records and bookmaker odds where the provider returns them.
+- Team-season statistics as descriptive tactical context (not a claim to identify a team's exact tactical system).
+- Per-source status, retrieval timestamp, result count and explicit unavailable/error states.
+
+Set `API_FOOTBALL_KEY` as an environment secret. Never commit API credentials. Without a key, the module returns a clear `not_configured` state and does not invent data. Provider coverage and plan limits vary by league, season and endpoint.
+
+**Integration status:** this is a provider/data layer. It is not yet wired into the Streamlit match screen, and its outputs do not change Elo or Dixon–Coles probabilities. Keep it contextual until historical availability can be reconstructed and the feature's incremental value is tested with chronological out-of-sample evaluation.
+
+Run its unit tests with:
+
+```bash
+python -m unittest tests.test_match_intelligence
+```
