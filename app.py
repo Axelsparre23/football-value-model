@@ -135,7 +135,7 @@ if profile_data.empty:
 with st.expander("Optional: recent form and team profiles", expanded=False):
     ph, pa = st.columns(2)
     for col, team in [(ph, home), (pa, away)]:
-        snap = team_snapshot(data, team, 5)
+        snap = team_snapshot(pre_match_data, team, 5)
         prof = team_profile(profile_data, team)
         with col:
             st.markdown(f"**{team}**")
@@ -269,11 +269,14 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             f"({away_profile['points']} points from {away_profile['played']} matches, "
             f"goal difference {away_profile['gd']:+d})."
         )
+        home_gf10 = f"{home_profile['last10_gf']:.2f}" if home_profile["last10_gf"] is not None else "unavailable"
+        home_ga10 = f"{home_profile['last10_ga']:.2f}" if home_profile["last10_ga"] is not None else "unavailable"
+        away_gf10 = f"{away_profile['last10_gf']:.2f}" if away_profile["last10_gf"] is not None else "unavailable"
+        away_ga10 = f"{away_profile['last10_ga']:.2f}" if away_profile["last10_ga"] is not None else "unavailable"
         st.write(
             f"**Attacking and defensive output:** in their latest ten available matches, "
-            f"{home} averages {home_profile['last10_gf'] or 0:.2f} goals scored and "
-            f"{home_profile['last10_ga'] or 0:.2f} conceded; {away} averages "
-            f"{away_profile['last10_gf'] or 0:.2f} scored and {away_profile['last10_ga'] or 0:.2f} conceded."
+            f"{home} averages {home_gf10} goals scored and {home_ga10} conceded; "
+            f"{away} averages {away_gf10} scored and {away_ga10} conceded."
         )
         if home_profile["shots"] is not None and away_profile["shots"] is not None:
             st.write(
