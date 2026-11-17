@@ -26,13 +26,13 @@ Player name | rating from 1 to 10 | position
 
 Examples: `Alex Smith | 7.6 | ST`, `Jordan Jones | 7.2 | CB`. Positions recognised include GK, CB, LB, RB, DF, DM, CM, AM, LM, RM, LW, RW, ST and FW. Ratings are optional, but a line without a rating does not affect the calculated player impact. Enter unavailable players separately using the same format.
 
-Live confirmed lineups and fixture-level absence records can be loaded from API-Football when configured. Expected lineups are not fabricated; when confirmed XIs have not been released, the app reports them as unavailable.
+Live confirmed lineups and match events can be loaded from Highlightly when configured. Expected lineups are not fabricated; when confirmed XIs have not been released, the app reports them as unavailable.
 
 ## Automatic team-news integration
 
-- Optional provider: [API-Football / API-Sports](https://www.api-football.com/). Its free plan advertises 100 requests/day and endpoints for fixtures, lineups, player statistics and injuries. Free-plan season coverage is restricted and must be checked for each competition/season.
-- Configure `API_FOOTBALL_KEY` as a Codespaces environment variable or in `.streamlit/secrets.toml`. Never commit the key to GitHub.
-- The match screen searches for the selected fixture and retrieves confirmed lineups, fixture-level absence records, available 1X2 bookmaker prices and team-season context. Missing data stays missing; expected lineups are never fabricated. Odds movement is shown only between snapshots observed during the current app session.
+- Optional provider: [Highlightly Football API](https://highlightly.net/football-api/). Its free tier advertises 100 requests/day and provides match data, confirmed lineups and live events, subject to competition coverage and plan restrictions.
+- Configure `HIGHLIGHTLY_API_KEY` as a Streamlit secret or environment variable. Never commit the key to GitHub.
+- The match screen searches for the selected fixture and retrieves confirmed lineups and live events. The free tier does not include bookmaker odds, and this integration does not claim to provide a verified injuries/suspensions feed. Manual bookmaker odds remain available in the benchmark section.
 - SofaScore is not scraped: it has no official public API and its terms restrict automated extraction and reuse.
 
 ## Data sources
@@ -44,7 +44,7 @@ Live confirmed lineups and fixture-level absence records can be loaded from API-
 
 ## Important limitations
 
-- The optional API-Football connection may not return current-season data for every competition on the free tier. No provider guarantees complete player ratings, injuries, suspensions or confirmed XIs across all six competitions. xG, possession, PPDA and detailed tactical events remain inconsistently available.
+- Highlightly's free tier may restrict competition data and does not include bookmaker odds. The current integration does not provide verified injury/suspension data. Confirmed lineups are available only within the provider's published pre-match window. Coverage must be tested for each selected competition.
 - The table profile uses a rolling 365-day window as a season-to-date approximation. This is useful for context but is not an official competition table at every point in the season.
 - Elo's standalone draw mapping, player impact coefficients and rest-day adjustment remain heuristic and are not yet validated as live prediction inputs.
 - The research evaluator now uses whole-date chronological partitions (60% training, 20% validation, 20% final test), selects the Dixon–Coles/Elo blend weight on validation data, fits temperature calibration on validation data, and reports raw and calibrated Brier, log-loss and ranked probability scores on the untouched final block.
@@ -276,16 +276,11 @@ The main 1X2 forecast remains dynamic Elo. The lineup/absence/rest-adjusted Dixo
 
 ## Optional live match intelligence module
 
-The `match_intelligence.py` provider is integrated into the match screen and supports the six configured competitions:
+The `match_intelligence.py` module uses Highlightly for fixture lookup, confirmed lineups and live match events. It searches by league, date and both team names, and reports per-source status and retrieval timestamps. Set `HIGHLIGHTLY_API_KEY` as a Streamlit secret or environment variable. Never commit API credentials. Without a key, the module returns a clear `not_configured` state and does not invent data.
 
-- Fixture lookup by league, season, date, home team and away team.
-- Fixture-level confirmed lineups, injury/suspension records and bookmaker odds where the provider returns them.
-- Team-season statistics as descriptive tactical context (not a claim to identify a team's exact tactical system).
-- Per-source status, retrieval timestamp, result count and explicit unavailable/error states.
+The free tier does not include bookmaker odds, and verified injuries/suspensions are not part of this integration. The app labels these gaps explicitly. Competition coverage on the free tier must be verified in the live account.
 
-Set `API_FOOTBALL_KEY` as an environment secret. Never commit API credentials. Without a key, the module returns a clear `not_configured` state and does not invent data. Provider coverage and plan limits vary by league, season and endpoint.
-
-**Model status:** these outputs are displayed as context and do not change Elo or Dixon–Coles probabilities. Expected XIs and full historical odds movement are not supplied by this integration. Keep all new inputs contextual until historical availability can be reconstructed and incremental value is tested with chronological out-of-sample evaluation.
+**Model status:** live outputs are contextual only and do not change Elo or Dixon–Coles probabilities. Do not claim an accuracy improvement until new features are evaluated using chronological out-of-sample tests.
 
 Run its unit tests with:
 
