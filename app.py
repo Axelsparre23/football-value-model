@@ -236,11 +236,11 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             bm3.metric(f"{away} market", f"{market_probs[2]:.1%}", f"{(final_probs[2]-market_probs[2])*100:+.1f} pp vs model")
             st.caption("Market probabilities are proportional no-vig estimates from the odds you entered. Differences are descriptive, not evidence of value or a profitable edge.")
 
-        st.markdown("**Independent model cross-check**")
-        m1,m2,m3 = st.columns(3)
-        m1.metric("Rest-adjusted Dixon–Coles H / D / A", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
-        m2.metric("Dynamic Elo H / D / A", f"{final_probs[0]:.1%} / {final_probs[1]:.1%} / {final_probs[2]:.1%}")
-        m3.metric("Elo strength difference", f"{elo_diff:+.0f} points")
+        with st.expander("Advanced: model diagnostics and independent cross-check"):
+            m1,m2,m3 = st.columns(3)
+            m1.metric("Rest-adjusted Dixon–Coles H / D / A", f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%}")
+            m2.metric("Dynamic Elo H / D / A", f"{final_probs[0]:.1%} / {final_probs[1]:.1%} / {final_probs[2]:.1%}")
+            m3.metric("Elo strength difference", f"{elo_diff:+.0f} points")
 
         st.markdown("**Why the forecast looks this way: team performance**")
         # Use only matches completed before the selected fixture date.
