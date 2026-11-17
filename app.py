@@ -1,5 +1,6 @@
 """Fast football match calculator: Dixon-Coles + dynamic Elo + transparent team news."""
 from pathlib import Path
+import os
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -10,6 +11,10 @@ from football_value_model_v3 import DixonColesModel, dixon_coles_tau
 from advanced_model import elo_history, elo_probabilities, team_profile, rest_days
 
 from model_research import chronological_ensemble_evaluation
+from match_intelligence import (
+    APIFootballClient, unavailable_result,
+    extract_1x2_odds, compare_odds_snapshots,
+)
 
 st.set_page_config(page_title="Match Analysis", page_icon=":soccer:", layout="wide")
 
@@ -41,6 +46,41 @@ hr { border-color:var(--line); }
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="match-hero"><div class="match-kicker">Match intelligence · Research edition</div><h1 style="margin:.25rem 0 0">Match analysis</h1><div class="match-sub">Probability estimates, team context and model diagnostics across six leagues.</div></div>', unsafe_allow_html=True)
+
+
+def get_api_football_key():
+    key = os.getenv("API_FOOTBALL_KEY", "").strip()
+    if key:
+        return key
+    try:
+        return str(st.secrets.get("API_FOOTBALL_KEY", "")).strip()
+    except Exception:
+        return ""
+
+
+@st.cache_data(ttl=900, show_spinner=False)
+def load_live_match_information(code, season, match_date, home_team, away_team, api_key):
+    client = APIFootballClient(api_key=api_key)
+    if not client.configured:
+        return unavailable_result("API_FOOTBALL_KEY is not configured.")
+    fixture = client.find_fixture(code, season, match_date, home_team, away_team)
+    if not fixture:
+        return {
+            "overall_status": "no_fixture",
+            "message": "No matching fixture was returned for this date and competition.",
+            "lineups": [], "absences": [], "odds": [], "team_statistics": [],
+            "sources": {},
+        }
+    fixture_id = (fixture.get("fixture") or {}).get("id")
+    if not fixture_id:
+        return {
+            "overall_status": "no_fixture",
+            "message": "The provider response did not include a fixture ID.",
+            "lineups": [], "absences": [], "odds": [], "team_statistics": [],
+            "sources": {},
+        }
+    return client.fixture_data(int(fixture_id))
+
 
 @st.cache_data(ttl=21600, show_spinner=False)
 def load_league(code):
@@ -322,6 +362,110 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
             "A 60% probability does not mean a guaranteed result: even with perfect calibration, "
             "that outcome would fail about 4 times in 10. These are estimates, not certainty."
         )
+
+        with st.expander("Match information: lineups, availability and market", expanded=False):
+            api_key = get_api_football_key()
+            if not api_key:
+                st.info("Live match information is not connected. Add API_FOOTBALL_KEY as a secret to enable the provider. No sample data is shown.")
+            else:
+                season = kickoff.year if league_code == "SWE" or kickoff.month >= 7 else kickoff.year - 1
+                with st.spinner("Checking provider fixture, lineups, absences and market prices..."):
+                    live = load_live_match_information(
+                        league_code, season, kickoff.isoformat(), home, away, api_key
+                    )
+                if live.get("overall_status") == "no_fixture":
+                    st.warning(live.get("message", "No matching provider fixture was found."))
+                elif live.get("overall_status") == "not_configured":
+                    st.info("The live provider is not configured.")
+                else:
+                    st.caption(
+                        f"Source: API-Football · retrieved {live.get('fetched_at', 'timestamp unavailable')} · "
+                        "provider coverage can vary by competition and subscription."
+                    )
+                    if live.get("sources"):
+                        source_rows = [
+                            {"Data": name.replace("_", " ").title(),
+                             "Status": item.get("status", "unknown"),
+                             "Records": item.get("result_count", 0),
+                             "Retrieved": item.get("fetched_at", "")}
+                            for name, item in live["sources"].items()
+                        ]
+                        st.dataframe(pd.DataFrame(source_rows), hide_index=True, use_container_width=True)
+
+                    st.markdown("**Confirmed starting lineups**")
+                    lineups = live.get("lineups") or []
+                    if not lineups:
+                        st.info("No confirmed lineups were returned. Expected lineups are not invented or presented as confirmed.")
+                    else:
+                        lineup_cols = st.columns(2)
+                        for idx, team_lineup in enumerate(lineups[:2]):
+                            team_info = team_lineup.get("team") or {}
+                            start_xi = team_lineup.get("startXI") or []
+                            names = [
+                                (entry.get("player") or {}).get("name", "Unknown player")
+                                for entry in start_xi
+                            ]
+                            with lineup_cols[idx]:
+                                st.write(f"**{team_info.get('name', 'Team')}** · {team_lineup.get('formation') or 'formation unavailable'}")
+                                if names:
+                                    st.write("\n".join(f"• {name}" for name in names))
+                                else:
+                                    st.caption("Starting XI unavailable.")
+                    st.caption("The provider supplies confirmed lineups when released; it does not supply a reliable expected XI here.")
+
+                    st.markdown("**Injuries and suspensions**")
+                    absences = live.get("absences") or []
+                    absence_rows = []
+                    for item in absences:
+                        player = item.get("player") or {}
+                        team_info = item.get("team") or {}
+                        if player.get("name"):
+                            absence_rows.append({
+                                "Team": team_info.get("name", "Unknown"),
+                                "Player": player.get("name"),
+                                "Status": player.get("type") or "Unavailable",
+                                "Reason": player.get("reason") or "Not specified",
+                            })
+                    if absence_rows:
+                        st.dataframe(pd.DataFrame(absence_rows), hide_index=True, use_container_width=True)
+                    else:
+                        st.caption("No absence records returned. This does not establish that both squads are injury-free.")
+
+                    st.markdown("**Bookmaker odds and observed movement**")
+                    current_odds = extract_1x2_odds(live.get("odds") or [])
+                    if current_odds:
+                        st.dataframe(pd.DataFrame(current_odds), hide_index=True, use_container_width=True)
+                        fixture_id = live.get("fixture_id")
+                        snapshot_key = f"api_football_odds_{fixture_id}"
+                        previous_odds = st.session_state.get(snapshot_key, [])
+                        movement = compare_odds_snapshots(previous_odds, current_odds)
+                        if movement:
+                            st.write("Change since the previous check in this session (decimal odds):")
+                            st.dataframe(pd.DataFrame(movement), hide_index=True, use_container_width=True)
+                        else:
+                            st.caption("A first odds snapshot is stored for this session. Movement will appear after a later refresh if prices change.")
+                        st.session_state[snapshot_key] = current_odds
+                        st.caption("Movement is measured only between snapshots observed in this active app session; it is not a complete historical odds feed.")
+                    else:
+                        st.caption("No usable 1X2 bookmaker prices were returned for this fixture.")
+
+                    st.markdown("**Team-season context**")
+                    team_stats = live.get("team_statistics") or []
+                    if team_stats:
+                        for entry in team_stats:
+                            stats = entry.get("statistics") or {}
+                            team_name = (stats.get("team") or {}).get("name") or entry.get("side", "Team")
+                            fixtures_played = (stats.get("fixtures") or {}).get("played") or {}
+                            goals_for = (stats.get("goals") or {}).get("for") or {}
+                            avg_for = (goals_for.get("average") or {}).get("total")
+                            st.write(
+                                f"**{team_name}:** {fixtures_played.get('total', 'n/a')} matches played · "
+                                f"average goals scored {avg_for if avg_for is not None else 'unavailable'}"
+                            )
+                    else:
+                        st.caption("Team-season statistics were unavailable from the provider.")
+                    st.caption("These are contextual data only. They do not change the Elo prediction; no accuracy gain is claimed.")
+
     except Exception as exc:
         progress_area.empty()
         st.error(f"Prediction failed: {exc}")
