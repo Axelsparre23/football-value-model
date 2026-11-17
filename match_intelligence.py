@@ -10,8 +10,11 @@ out-of-sample validation.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
 import os
+import re
+import unicodedata
 from typing import Any
 
 import requests
@@ -68,21 +71,27 @@ class APIFootballClient:
         """Find the selected fixture on the provider's local date."""
         if league_code not in LEAGUE_IDS:
             raise ValueError(f"Unsupported league code: {league_code}")
+        selected_date = datetime.fromisoformat(match_date).date()
         payload = self._get("fixtures", {
             "league": LEAGUE_IDS[league_code],
             "season": int(season),
-            "date": match_date,
+            "from": (selected_date - timedelta(days=1)).isoformat(),
+            "to": (selected_date + timedelta(days=1)).isoformat(),
+            "timezone": "Europe/Stockholm",
         })
         home = _normalise_name(home_team)
         away = _normalise_name(away_team)
+        candidates = []
         for item in payload.get("response", []):
             teams = item.get("teams", {})
-            if (
-                _normalise_name(teams.get("home", {}).get("name", "")) == home
-                and _normalise_name(teams.get("away", {}).get("name", "")) == away
-            ):
-                return item
-        return None
+            home_score = _team_name_score(home, teams.get("home", {}).get("name", ""))
+            away_score = _team_name_score(away, teams.get("away", {}).get("name", ""))
+            if home_score >= 0.78 and away_score >= 0.78:
+                candidates.append((home_score + away_score, item))
+        if not candidates:
+            return None
+        candidates.sort(key=lambda row: row[0], reverse=True)
+        return candidates[0][1]
 
     def fixture_data(self, fixture_id: int) -> dict[str, Any]:
         """Return lineups, absences, odds and team statistics with source status."""
@@ -160,7 +169,21 @@ class APIFootballClient:
 
 
 def _normalise_name(value: str) -> str:
-    return " ".join(str(value).casefold().replace(".", "").split())
+    value = unicodedata.normalize("NFKD", str(value)).encode("ascii", "ignore").decode()
+    tokens = re.sub(r"[^a-zA-Z0-9 ]", " ", value).casefold().split()
+    ignored = {"fc", "if", "aif", "afc", "cf", "fk", "club"}
+    return " ".join(token for token in tokens if token not in ignored)
+
+
+def _team_name_score(selected: str, provider_name: str) -> float:
+    candidate = _normalise_name(provider_name)
+    if not selected or not candidate:
+        return 0.0
+    if selected == candidate:
+        return 1.0
+    if selected in candidate or candidate in selected:
+        return 0.92
+    return SequenceMatcher(None, selected, candidate).ratio()
 
 
 def _source_status(
