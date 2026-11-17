@@ -215,3 +215,54 @@ def unavailable_result(reason: str) -> dict[str, Any]:
             for key in keys
         },
     }
+
+
+def extract_1x2_odds(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Flatten provider 1X2 prices into comparable bookmaker snapshots."""
+    rows = []
+    for record in records or []:
+        updated = record.get("update")
+        for bookmaker in record.get("bookmakers", []) or []:
+            for market in bookmaker.get("bets", []) or []:
+                market_name = str(market.get("name", "")).casefold()
+                if market_name not in {"match winner", "1x2", "fulltime result"}:
+                    continue
+                values = {
+                    str(item.get("value", "")).casefold(): item.get("odd")
+                    for item in market.get("values", []) or []
+                }
+                try:
+                    home = float(values["home"])
+                    draw = float(values["draw"])
+                    away = float(values["away"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if min(home, draw, away) <= 1.0:
+                    continue
+                rows.append({
+                    "bookmaker": str(bookmaker.get("name", "Unknown")),
+                    "home": home,
+                    "draw": draw,
+                    "away": away,
+                    "updated_at": updated,
+                })
+    return rows
+
+
+def compare_odds_snapshots(
+    previous: list[dict[str, Any]], current: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Compare current prices with the previous in-session snapshot per bookmaker."""
+    old = {row["bookmaker"]: row for row in previous or []}
+    changes = []
+    for row in current or []:
+        prior = old.get(row["bookmaker"])
+        if not prior:
+            continue
+        changes.append({
+            "bookmaker": row["bookmaker"],
+            "home": round(row["home"] - prior["home"], 3),
+            "draw": round(row["draw"] - prior["draw"], 3),
+            "away": round(row["away"] - prior["away"], 3),
+        })
+    return changes
