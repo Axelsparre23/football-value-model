@@ -137,38 +137,64 @@ class DixonColesModel:
         self.xg_matches=int(has_xg.sum())
         age=np.maximum((as_of-train.Date).dt.total_seconds().to_numpy()/86400,0)
         w=np.exp(-math.log(2)*age/self.half_life)
+        low_score = (hg <= 1) & (ag <= 1)
+        # Precompute outcome masks once; the optimiser evaluates this objective
+        # many times, so avoid rebuilding boolean masks on every iteration.
+        m00 = low_score & (hg == 0) & (ag == 0)
+        m01 = low_score & (hg == 0) & (ag == 1)
+        m10 = low_score & (hg == 1) & (ag == 0)
+        m11 = low_score & (hg == 1) & (ag == 1)
+
         def objective(p):
             inter,home=p[:2]; attack=p[2:2+n]; defence=p[2+n:2+2*n]; rho=p[-1]
-            lh=np.clip(np.exp(inter+home+attack[hi]-defence[ai]),.03,8)
-            la=np.clip(np.exp(inter+attack[ai]-defence[hi]),.03,8)
+            raw_lh=np.exp(inter+home+attack[hi]-defence[ai])
+            raw_la=np.exp(inter+attack[ai]-defence[hi])
+            lh=np.clip(raw_lh,.03,8)
+            la=np.clip(raw_la,.03,8)
             ll=lh-target_h*np.log(lh)+la-target_a*np.log(la)
-            # Vectorised Dixon-Coles low-score correction. This is mathematically
-            # identical to the per-match loop, but avoids Python work on every
-            # optimiser evaluation (the objective is evaluated many times).
-            low_score = (hg <= 1) & (ag <= 1)
+
+            # Exact analytic gradient for L-BFGS-B. This produces the same
+            # objective as before but avoids SciPy finite-difference evaluations
+            # (roughly 2 * number_of_parameters extra objective calls per step).
+            gh=w*(lh-target_h)*((raw_lh>.03)&(raw_lh<8))
+            ga=w*(la-target_a)*((raw_la>.03)&(raw_la<8))
+            grho=16.0*rho
             if np.any(low_score):
-                x = hg[low_score]
-                y = ag[low_score]
-                low_lh = lh[low_score]
-                low_la = la[low_score]
-                tau = np.ones(len(x), dtype=float)
-                m00 = (x == 0) & (y == 0)
-                m01 = (x == 0) & (y == 1)
-                m10 = (x == 1) & (y == 0)
-                m11 = (x == 1) & (y == 1)
-                tau[m00] = 1.0 - low_lh[m00] * low_la[m00] * rho
-                tau[m01] = 1.0 + low_lh[m01] * rho
-                tau[m10] = 1.0 + low_la[m10] * rho
-                tau[m11] = 1.0 - rho
-                if np.any(tau <= 0):
-                    return 1e12
-                ll[low_score] -= np.log(tau)
-            loss=np.sum(w*ll)+self.reg*(np.sum(attack**2)+np.sum(defence**2))+100*(attack.mean()**2+defence.mean()**2)
-            loss+=8*rho*rho
-            return float(loss)
+                tau=np.ones(len(train),dtype=float)
+                tau[m00]=1.0-lh[m00]*la[m00]*rho
+                tau[m01]=1.0+lh[m01]*rho
+                tau[m10]=1.0+la[m10]*rho
+                tau[m11]=1.0-rho
+                if np.any(tau[low_score]<=0):
+                    return 1e12, np.zeros_like(p)
+                ll[low_score]-=np.log(tau[low_score])
+                gh[m00]+=w[m00]*lh[m00]*la[m00]*rho/tau[m00]
+                ga[m00]+=w[m00]*lh[m00]*la[m00]*rho/tau[m00]
+                gh[m01]-=w[m01]*lh[m01]*rho/tau[m01]
+                ga[m10]-=w[m10]*la[m10]*rho/tau[m10]
+                grho+=float(np.sum(w[m00]*lh[m00]*la[m00]/tau[m00]))
+                grho-=float(np.sum(w[m01]*lh[m01]/tau[m01]))
+                grho-=float(np.sum(w[m10]*la[m10]/tau[m10]))
+                grho+=float(np.sum(w[m11]/tau[m11]))
+
+            loss=float(np.sum(w*ll))
+            loss+=self.reg*(np.sum(attack**2)+np.sum(defence**2))
+            loss+=100*(attack.mean()**2+defence.mean()**2)+8*rho*rho
+
+            grad=np.empty_like(p)
+            grad[0]=float(np.sum(gh+ga))
+            grad[1]=float(np.sum(gh))
+            grad[2:2+n]=(np.bincount(hi,weights=gh,minlength=n)+
+                         np.bincount(ai,weights=ga,minlength=n)+
+                         2*self.reg*attack+200*attack.mean()/n)
+            grad[2+n:2+2*n]=(-np.bincount(ai,weights=gh,minlength=n)-
+                              np.bincount(hi,weights=ga,minlength=n)+
+                              2*self.reg*defence+200*defence.mean()/n)
+            grad[-1]=grho
+            return loss,grad
         p0=np.zeros(3+2*n); p0[0]=math.log(max((hg.sum()+ag.sum())/(2*len(train)),.5)); p0[1]=.12
         bounds=[(-3,2),(-.5,.8)]+[(-2,2)]*(2*n)+[(-.15,.15)]
-        res=minimize(objective,p0,method="L-BFGS-B",bounds=bounds,options={"maxiter":700,"ftol":1e-9})
+        res=minimize(objective,p0,jac=True,method="L-BFGS-B",bounds=bounds,options={"maxiter":700,"ftol":1e-9})
         if not np.isfinite(res.fun): raise RuntimeError("Dixon-Coles fit failed")
         self.teams,self.ix,self.p,self.rho=teams,ix,res.x,float(res.x[-1])
         return self
