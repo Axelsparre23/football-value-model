@@ -108,19 +108,30 @@ with st.expander("Optional: bookmaker probability benchmark", expanded=False):
 
 def team_snapshot(df, team, n=5):
     rows = df[((df.HomeTeam == team) | (df.AwayTeam == team))].sort_values("Date").tail(n)
-    gf, ga, points = [], [], 0
+    gf, ga, points, form = [], [], 0, []
     for _, r in rows.iterrows():
         is_home = r.HomeTeam == team
-        scored = r.FTHG if is_home else r.FTAG
-        conceded = r.FTAG if is_home else r.FTHG
-        gf.append(float(scored)); ga.append(float(conceded))
-        points += 3 if scored > conceded else (1 if scored == conceded else 0)
+        scored = float(r.FTHG if is_home else r.FTAG)
+        conceded = float(r.FTAG if is_home else r.FTHG)
+        gf.append(scored); ga.append(conceded)
+        result = "W" if scored > conceded else ("D" if scored == conceded else "L")
+        form.append(result)
+        points += 3 if result == "W" else (1 if result == "D" else 0)
     return {"matches":len(rows), "gf":float(np.mean(gf)) if gf else 0.0,
-            "ga":float(np.mean(ga)) if ga else 0.0, "points":points, "rows":rows}
+            "ga":float(np.mean(ga)) if ga else 0.0, "points":points,
+            "wins":form.count("W"), "draws":form.count("D"), "losses":form.count("L"),
+            "form":"–".join(form) if form else "unavailable",
+            "points_per_match":points/len(rows) if len(rows) else 0.0, "rows":rows}
 
-# Use the actual competition season boundary for table position (calendar year in Sweden; July start for the European leagues).
-season_start = pd.Timestamp(year=latest_date.year if league_code == "SWE" or latest_date.month >= 7 else latest_date.year - 1, month=1 if league_code == "SWE" else 7, day=1)
-profile_data = data[data.Date >= season_start].copy()
+# Build the table and recent-form context only from matches played before the selected fixture date.
+pre_match_data = data[data.Date < pd.Timestamp(kickoff)].copy()
+season_start = pd.Timestamp(
+    year=kickoff.year if league_code == "SWE" or kickoff.month >= 7 else kickoff.year - 1,
+    month=1 if league_code == "SWE" else 7, day=1
+)
+profile_data = pre_match_data[pre_match_data.Date >= season_start].copy()
+if profile_data.empty:
+    profile_data = pre_match_data.copy()
 with st.expander("Optional: recent form and team profiles", expanded=False):
     ph, pa = st.columns(2)
     for col, team in [(ph, home), (pa, away)]:
@@ -231,29 +242,71 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
         m2.metric("Dynamic Elo H / D / A", f"{final_probs[0]:.1%} / {final_probs[1]:.1%} / {final_probs[2]:.1%}")
         m3.metric("Elo strength difference", f"{elo_diff:+.0f} points")
 
-        st.markdown("**Why each probability has this value**")
+        st.markdown("**Why the forecast looks this way: team performance**")
+        # Use only matches completed before the selected fixture date.
+        home_recent = team_snapshot(pre_match_data, home, 5)
+        away_recent = team_snapshot(pre_match_data, away, 5)
+        home_profile = team_profile(profile_data, home)
+        away_profile = team_profile(profile_data, away)
+
         st.write(
-            f"The model first compares the teams' Elo ratings. {home} has an Elo rating of {home_elo:.0f}; "
-            f"{away} has {away_elo:.0f}. The model adds a fixed 65-point home advantage, giving "
-            f"{home} an effective pre-match Elo difference of {elo_diff:+.0f}."
+            f"**Recent results:** {home} has {home_recent['points']}/{home_recent['matches']*3} "
+            f"points from its last {home_recent['matches']} matches ({home_recent['form']}; "
+            f"{home_recent['wins']} wins, {home_recent['draws']} draws, {home_recent['losses']} losses). "
+            f"{away} has {away_recent['points']}/{away_recent['matches']*3} "
+            f"({away_recent['form']}; {away_recent['wins']} wins, {away_recent['draws']} draws, "
+            f"{away_recent['losses']} losses)."
         )
         st.write(
-            f"That difference is converted to a decisive-result split using the Elo logistic formula: "
-            f"before allowing for draws, the home side's share is {home_conditional:.1%} and the away side's "
-            f"share is {away_conditional:.1%}. The model separately estimates the draw probability as "
-            f"{draw_probability:.1%}, decreasing it as the teams' Elo gap grows."
+            f"**Recent scoring:** over those matches, {home} has scored {home_recent['gf']:.2f} "
+            f"and conceded {home_recent['ga']:.2f} goals per game; {away} has scored "
+            f"{away_recent['gf']:.2f} and conceded {away_recent['ga']:.2f}."
         )
         st.write(
-            f"After reserving {draw_probability:.1%} for a draw, the remaining {decisive_probability:.1%} "
-            f"is divided between the teams. This produces {home} win {final_probs[0]:.1%}, "
-            f"draw {final_probs[1]:.1%}, and {away} win {final_probs[2]:.1%}. "
-            f"The three probabilities sum to 100%."
+            f"**Season performance:** {home} is {home_profile['rank']} in the available table "
+            f"({home_profile['points']} points from {home_profile['played']} matches, "
+            f"goal difference {home_profile['gd']:+d}); {away} is {away_profile['rank']} "
+            f"({away_profile['points']} points from {away_profile['played']} matches, "
+            f"goal difference {away_profile['gd']:+d})."
         )
+        st.write(
+            f"**Attacking and defensive output:** in their latest ten available matches, "
+            f"{home} averages {home_profile['last10_gf'] or 0:.2f} goals scored and "
+            f"{home_profile['last10_ga'] or 0:.2f} conceded; {away} averages "
+            f"{away_profile['last10_gf'] or 0:.2f} scored and {away_profile['last10_ga'] or 0:.2f} conceded."
+        )
+        if home_profile["shots"] is not None and away_profile["shots"] is not None:
+            st.write(
+                f"**Chance volume:** {home} averages {home_profile['shots']:.1f} shots "
+                f"({home_profile['sot']:.1f} on target) per match in its latest ten available matches; "
+                f"{away} averages {away_profile['shots']:.1f} "
+                f"({away_profile['sot']:.1f} on target)."
+            )
+        else:
+            st.caption("Shot statistics are incomplete for at least one team, so they are not used in this comparison.")
+
+        if home_recent["points_per_match"] > away_recent["points_per_match"] + 0.2:
+            form_read = f"{home} has the stronger five-match points return."
+        elif away_recent["points_per_match"] > home_recent["points_per_match"] + 0.2:
+            form_read = f"{away} has the stronger five-match points return."
+        else:
+            form_read = "The teams' five-match points returns are broadly similar."
+        st.write(f"**Matchup reading:** {form_read} The scoring and table figures above show whether that recent form is supported by the broader season performance.")
+
         st.caption(
-            "The main 1X2 forecast is dynamic Elo. It uses historical results, sequential rating updates, "
-            "a 65-point home advantage and a draw adjustment based on rating difference. "
-            "Recent form and shot statistics are shown as context, not added as unvalidated probability multipliers."
+            f"The displayed probabilities are the model's forecast: {home} {final_probs[0]:.1%}, "
+            f"draw {final_probs[1]:.1%}, {away} {final_probs[2]:.1%}. The performance figures explain "
+            f"the football evidence around that forecast; they are not falsely presented as direct percentage "
+            f"adjustments. Recent-form and shot-based models have not yet shown reliable out-of-sample "
+            f"improvement over the current result-based baseline, so they are not given arbitrary weights."
         )
+        with st.expander("Technical model calculation"):
+            st.write(
+                f"The underlying forecast uses the teams' pre-match ratings, built sequentially from prior "
+                f"match results. The effective home/away rating difference is {elo_diff:+.0f} points "
+                f"after the home-advantage adjustment. The baseline produces {final_probs[0]:.1%} / "
+                f"{final_probs[1]:.1%} / {final_probs[2]:.1%} for home / draw / away."
+            )
         st.write(
             f"The independent Dixon–Coles goal model gives a separate check of "
             f"{adjusted_dc[0]:.1%} / {adjusted_dc[1]:.1%} / {adjusted_dc[2]:.1%} "
