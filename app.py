@@ -214,16 +214,18 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
     try:
         status.caption("1/5 · Preparing match data")
         progress.progress(10, text="Preparing match data...")
-        signature = f"{league_code}-{len(data)}-{latest_date.date()}"
+        signature = f"{league_code}-{len(pre_match_data)}-{pre_match_data.Date.max().date() if not pre_match_data.empty else 'no-history'}-{kickoff.isoformat()}"
 
         status.caption("2/5 · Fitting goal model")
         progress.progress(25, text="Fitting goal model...")
-        model = fit_model(league_code, signature, data)
+        if pre_match_data.empty:
+            raise ValueError("No completed matches are available before this fixture date.")
+        model = fit_model(league_code, signature, pre_match_data)
         dc_probs, (base_hg, base_ag) = model.probabilities(home, away)
 
         status.caption("3/5 · Calculating team strength")
         progress.progress(48, text="Calculating Elo ratings...")
-        elo_rows, elo_ratings = get_elo(data)
+        elo_rows, elo_ratings = get_elo(pre_match_data)
         home_elo = elo_ratings.get(home, 1500.0)
         away_elo = elo_ratings.get(away, 1500.0)
         elo_diff = home_elo + 65.0 - away_elo
