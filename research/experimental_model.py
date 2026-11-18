@@ -65,7 +65,7 @@ def fit_residual_model(features, market_probabilities, outcomes, ridge=0.1):
         objective, np.zeros(3 * n_features), jac=True, method="L-BFGS-B",
         options={"maxiter": 1000, "ftol": 1e-10},
     )
-    if not np.isfinite(result.fun):
+    if not result.success or not np.isfinite(result.fun):
         raise RuntimeError(f"Experimental residual-model fit failed: {result.message}")
     return {
         "weights": result.x.reshape(3, n_features),
