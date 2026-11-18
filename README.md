@@ -35,7 +35,7 @@ Changes to the market-residual experiment and its data/model dependencies on `de
 - `market_residual_uncertainty.csv`: paired match-level bootstrap differences versus the market, with 95% intervals. Negative score differences favour the residual model.
 - `market_residual_calibration.csv`: classwise reliability bins for home, draw and away probabilities.
 
-The run prints source download failures and skips league-seasons that do not meet minimum sample and odds-coverage thresholds. It does not alter the live model or prospective forecast log. A workflow run must complete successfully and its output must be inspected before conclusions are drawn.
+The run prints source download failures, reports each test season's total fixtures and odds-covered fixtures, and skips league-seasons that do not meet minimum sample and odds-coverage thresholds. It does not alter the live model or prospective forecast log. A workflow run must complete successfully and its output must be inspected before conclusions are drawn.
 
 ## Isolated experimental model
 
