@@ -13,7 +13,7 @@ This is a read-only audit and experiment plan. It does not change the live predi
 5. **Several context adjustments are heuristic.** The fixed Elo draw mapping, fixed K/home advantage, rest-day xG adjustment and manually rated player-impact coefficients need validation on untouched seasons before activation.
 6. **Elo has no explicit season-start regression-to-mean step.** `elo_history` accepts a `carryover` parameter but does not use it. This is a candidate for a controlled experiment, not an immediate production change.
 7. **The historical evaluation framework is still limited.** The current chronological ensemble evaluator uses one train/validation/test split. The existing experiment scripts explore draw calibration, league-specific Elo parameters, market calibration, form and market residuals, but their results must be run and retained before drawing conclusions.
-8. **The prospective 40-match cohort is small and user-selected.** It is useful as a live process check, not a representative league-wide estimate. The market comparison must also exclude synthetic best-price triples and unidentified operators.
+8. **The prospective 40-match cohort is small and user-selected.** It is useful as a live process check, not a representative league-wide estimate. The market comparison must also exclude synthetic best-price triples and unidentified operators, and require a named source plus timestamp for each price snapshot.
 
 ## Prioritised experimental questions
 
