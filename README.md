@@ -20,7 +20,7 @@ Choose a league, home team and away team, then press **Calculate match predictio
 
 Open the **Prospective Evaluation** page from the Streamlit sidebar. It reads `research/prospective_50_match_log.csv` in read-only mode and reports Elo, Dixon–Coles and market Brier score, log loss, ranked probability score, accuracy, calibration and paired bootstrap uncertainty intervals once results are recorded.
 
-The dashboard does not change forecasts or tune the live model. It only scores completed fixtures with valid pre-match probabilities. The strict market comparison requires a named single bookmaker; synthetic best-price aggregates and unidentified operators are excluded. Closing prices are eligible only when their operator is recorded in `closing_bookmaker_name`. The original recorded prices remain in the log for audit.
+The dashboard does not change forecasts or tune the live model. It only scores completed fixtures with valid pre-match probabilities. The strict market comparison requires a named single bookmaker, source and timestamp; synthetic best-price aggregates and unidentified operators are excluded. Closing prices are eligible only when `closing_bookmaker_name`, `closing_odds_source` and `closing_odds_timestamp_utc` are recorded. The original recorded prices remain in the log for audit.
 
 ## Isolated experimental model
 
