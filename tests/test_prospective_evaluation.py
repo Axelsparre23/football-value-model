@@ -11,7 +11,7 @@ class ProspectiveEvaluationTests(unittest.TestCase):
             {"match_id": 1, "kickoff_local": "2026-11-20", "home_team": "A", "away_team": "B",
              "elo_home_pct": 50, "elo_draw_pct": 25, "elo_away_pct": 25,
              "dc_home_pct": 45, "dc_draw_pct": 30, "dc_away_pct": 25,
-             "market_home_novig_pct": 48, "market_draw_novig_pct": 27, "market_away_novig_pct": 25, "bookmaker_name": "Bet365",
+             "market_home_novig_pct": 48, "market_draw_novig_pct": 27, "market_away_novig_pct": 25, "bookmaker_name": "Bet365", "odds_source": "Bet365 match odds page", "odds_timestamp_utc": "2026-11-19T12:00:00Z",
              "final_home_goals": 2, "final_away_goals": 0, "actual_outcome": ""},
             {"match_id": 2, "kickoff_local": "2026-11-21", "home_team": "C", "away_team": "D",
              "elo_home_pct": 30, "elo_draw_pct": 30, "elo_away_pct": 40,
@@ -36,6 +36,8 @@ class ProspectiveEvaluationTests(unittest.TestCase):
         log.loc[0, ["closing_market_home_novig_pct", "closing_market_draw_novig_pct",
                     "closing_market_away_novig_pct"]] = [40, 30, 30]
         log.loc[0, "closing_bookmaker_name"] = "Bet365"
+        log.loc[0, "closing_odds_source"] = "Bet365 match odds page"
+        log.loc[0, "closing_odds_timestamp_utc"] = "2026-11-20T18:00:00Z"
         scored = scored_rows(log)
         self.assertEqual(scored.iloc[0].market_snapshot, "closing")
         self.assertTrue(np.allclose(scored.iloc[0].Market_p, [0.4, 0.3, 0.3]))
