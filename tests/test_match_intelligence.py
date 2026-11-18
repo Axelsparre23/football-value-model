@@ -1,13 +1,49 @@
 import unittest
+from datetime import datetime, timezone
 from unittest.mock import Mock
 
 from match_intelligence import (
-    HighlightlyClient, HighlightlyError, LEAGUE_NAMES,
-    _normalise_name, unavailable_result,
+    DAILY_REQUEST_BUDGET, HighlightlyClient, HighlightlyError, LEAGUE_NAMES,
+    _USAGE, _USAGE_LOCK, _normalise_name, _record_api_request,
+    _record_api_response, get_api_usage, unavailable_result,
 )
 
 
 class MatchIntelligenceTests(unittest.TestCase):
+    def setUp(self):
+        with _USAGE_LOCK:
+            self.previous_usage = dict(_USAGE)
+            _USAGE.update(
+                date=datetime.now(timezone.utc).date().isoformat(),
+                requests=0, rate_limited=False, provider_remaining=None,
+            )
+
+    def tearDown(self):
+        with _USAGE_LOCK:
+            _USAGE.clear()
+            _USAGE.update(self.previous_usage)
+
+    def test_api_usage_counter_tracks_requests_and_remaining_estimate(self):
+        _record_api_request()
+        _record_api_request()
+        usage = get_api_usage()
+        self.assertEqual(usage["requests_today"], 2)
+        self.assertEqual(usage["remaining_estimate"], DAILY_REQUEST_BUDGET - 2)
+        self.assertFalse(usage["rate_limited"])
+
+    def test_provider_remaining_header_can_lower_estimate(self):
+        response = Mock(status_code=200, headers={"x-ratelimit-remaining": "7"})
+        _record_api_response(response)
+        usage = get_api_usage()
+        self.assertEqual(usage["remaining_estimate"], 7)
+
+    def test_http_429_marks_quota_as_exhausted(self):
+        response = Mock(status_code=429, headers={})
+        _record_api_response(response)
+        usage = get_api_usage()
+        self.assertTrue(usage["rate_limited"])
+        self.assertEqual(usage["remaining_estimate"], 0)
+
     def test_all_six_leagues_are_mapped(self):
         self.assertEqual(set(LEAGUE_NAMES), {"E0", "SP1", "D1", "I1", "F1", "SWE"})
         self.assertEqual(LEAGUE_NAMES["E0"], "Premier League")
