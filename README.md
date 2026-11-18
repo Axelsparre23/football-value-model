@@ -22,6 +22,10 @@ Open the **Prospective Evaluation** page from the Streamlit sidebar. It reads `r
 
 The dashboard does not change forecasts or tune the live model. It only scores completed fixtures with valid pre-match probabilities. The strict market comparison requires a named single bookmaker, source and timestamp; synthetic best-price aggregates and unidentified operators are excluded. Closing prices are eligible only when `closing_bookmaker_name`, `closing_odds_source` and `closing_odds_timestamp_utc` are recorded. The original recorded prices remain in the log for audit.
 
+## Model and data audit
+
+The current weaknesses, source comparison and prioritised experiment plan are documented in [`research/model_and_data_audit.md`](research/model_and_data_audit.md). The audit is intentionally separate from the production calculator.
+
 ## Isolated experimental model
 
 `research/experimental_model.py` contains a separate market-anchored multinomial residual model. It starts from no-vig market probabilities and learns a regularised correction from pre-match Elo/form features. The existing `market_residual_backtest.py` uses this module in a walk-forward experiment: it selects regularisation on the prior season and evaluates the next untouched season. This candidate is not imported by `app.py` and cannot change the live predictions or the frozen prospective cohort.
