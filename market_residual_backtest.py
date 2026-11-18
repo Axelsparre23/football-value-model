@@ -5,7 +5,7 @@ probabilities are a fixed log-probability offset; a regularised multinomial
 model learns whether Elo and pre-match form signals add information.
 
 European leagues: 2021/22 through 2025/26.
-Allsvenskan: evaluated against Elo only where historical odds are unavailable.
+Allsvenskan: excluded from the market-residual fit where consistent historical 1X2 odds are unavailable.
 
 Run: python market_residual_backtest.py
 """
