@@ -239,11 +239,15 @@ def main():
                     "EloHome": float(elo_p[0]), "EloDraw": float(elo_p[1]),
                     "EloAway": float(elo_p[2]),
                     "TrainMatches": int(len(train_market)),
+                    "TrainFixturesTotal": int(len(train)),
+                    "TestFixturesTotal": int(len(test)),
+                    "TestOddsCoverage": float(len(test_market) / max(1, len(test))),
                     "SelectedRidge": float(selected_ridge),
                     "ValidationLogLoss": float(validation_logloss),
                 })
-            print(f"  {year}: train={len(train_market)} odds-covered, "
-                  f"test={len(test_market)} odds-covered; ridge={selected_ridge:g}; "
+            print(f"  {year}: train odds coverage={len(train_market)}/{len(train)}, "
+                  f"test odds coverage={len(test_market)}/{len(test)} "
+                  f"({len(test_market) / max(1, len(test)):.1%}); ridge={selected_ridge:g}; "
                   f"validation logloss={validation_logloss:.4f}", flush=True)
 
     predictions = pd.DataFrame(all_predictions)
@@ -287,7 +291,12 @@ def main():
     print("\n=== RESULTS BY LEAGUE AND SEASON ===", flush=True)
     for (league_name, season), group in predictions.groupby(["LeagueName", "Season"], sort=True):
         actual = group.Actual.map(OUTCOME_MAP).to_numpy()
-        row = {"Scope": f"{league_name} {season}"}
+        row = {
+            "Scope": f"{league_name} {season}",
+            "TestFixturesTotal": int(group["TestFixturesTotal"].iloc[0]),
+            "OddsCoveredTestFixtures": int(len(group)),
+            "TestOddsCoverage": float(group["TestOddsCoverage"].iloc[0]),
+        }
         for name, cols in [
             ("Market", market_cols), ("Residual", residual_cols), ("Elo", elo_cols)
         ]:
