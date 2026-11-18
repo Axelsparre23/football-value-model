@@ -73,10 +73,10 @@ def run(include_dc=False):
     )
     download_failures = data.attrs.get("download_failures", [])
     if download_failures:
-        print("\\nWARNING: Some historical data sources could not be refreshed:")
+        print("\nWARNING: Some historical data sources could not be refreshed:")
         for failure in download_failures:
             print(f"  - {failure}")
-        print("Check target-season coverage before interpreting the results.\\n")
+        print("Check target-season coverage before interpreting the results.\n")
     data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
     data = data.dropna(subset=["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"])
     data = data.sort_values(["Date", "League", "HomeTeam", "AwayTeam"]).reset_index(drop=True)
