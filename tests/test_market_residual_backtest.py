@@ -5,6 +5,9 @@ from market_residual_backtest import (
     _per_match_losses,
     paired_bootstrap_vs_market,
     calibration_summary,
+    NO_CORRECTION,
+    fit_selected_candidate,
+    predict_selected_candidate,
 )
 
 
@@ -44,6 +47,14 @@ class MarketResidualEvaluationTests(unittest.TestCase):
         for metric in ("Brier", "LogLoss", "RPS"):
             self.assertLessEqual(first[f"{metric}_ci95_low"],
                                  first[f"{metric}_ci95_high"])
+
+    def test_market_only_fallback_is_exact_identity(self):
+        model = fit_selected_candidate(
+            np.zeros((len(self.actual), 1)), self.market, self.actual, NO_CORRECTION
+        )
+        self.assertIsNone(model)
+        prediction = predict_selected_candidate(model, np.zeros((len(self.actual), 1)), self.market)
+        np.testing.assert_allclose(prediction, self.market, atol=0.0, rtol=0.0)
 
     def test_calibration_bins_cover_each_outcome(self):
         rows = calibration_summary(self.model, self.actual, "Residual", "test", bins=5)
