@@ -71,20 +71,28 @@ def run(include_dc=False):
         Path("data/cache"), first_start_year=2010,
         leagues=tuple(LEAGUES), refresh_current=True
     )
+    download_failures = data.attrs.get("download_failures", [])
+    if download_failures:
+        print("\\nWARNING: Some historical data sources could not be refreshed:")
+        for failure in download_failures:
+            print(f"  - {failure}")
+        print("Check target-season coverage before interpreting the results.\\n")
     data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
     data = data.dropna(subset=["Date", "HomeTeam", "AwayTeam", "FTHG", "FTAG"])
     data = data.sort_values(["Date", "League", "HomeTeam", "AwayTeam"]).reset_index(drop=True)
 
-    print("Building chronological pre-match Elo snapshots...")
-    elo_rows, _ = elo_history(data)
-    elo_lookup = {}
-    for row in elo_rows.to_dict("records"):
-        key = (pd.Timestamp(row["Date"]).normalize(), str(row["HomeTeam"]), str(row["AwayTeam"]))
-        elo_lookup[key] = row
-
+    print("Building chronological pre-match Elo snapshots separately for each league...")
     prediction_rows = []
     for league, league_name in LEAGUES.items():
         league_data = data[data.League == league].copy()
+        # Match the app: Elo ratings are isolated within the selected league.
+        elo_rows, _ = elo_history(league_data)
+        elo_lookup = {}
+        for row in elo_rows.to_dict("records"):
+            key = (pd.Timestamp(row["Date"]).normalize(),
+                   str(row["HomeTeam"]), str(row["AwayTeam"]))
+            elo_lookup[key] = row
+
         targets = target_matches(league_data, league)
         if targets.empty:
             print(f"{league_name}: no target-season results found; skipped.")
