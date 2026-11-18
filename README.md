@@ -22,6 +22,18 @@ Open the **Prospective Evaluation** page from the Streamlit sidebar. It reads `r
 
 The dashboard does not change forecasts or tune the live model. It only scores completed fixtures with valid pre-match probabilities. The strict market comparison requires a named single bookmaker; synthetic best-price aggregates and unidentified operators are excluded. Closing prices are eligible only when their operator is recorded in `closing_bookmaker_name`. The original recorded prices remain in the log for audit.
 
+## Isolated experimental model
+
+`research/experimental_model.py` contains a separate market-anchored multinomial residual model. It starts from no-vig market probabilities and learns a regularised correction from pre-match Elo/form features. The existing `market_residual_backtest.py` uses this module in a walk-forward experiment: it selects regularisation on the prior season and evaluates the next untouched season. This candidate is not imported by `app.py` and cannot change the live predictions or the frozen prospective cohort.
+
+Run the experiment with:
+
+```bash
+python market_residual_backtest.py
+```
+
+It requires historical odds coverage and writes separate files under `output/`. Treat it as an experiment until repeated out-of-sample comparisons, paired uncertainty intervals and data-coverage checks support it.
+
 ## Player input format
 
 Enter one player per line:
