@@ -437,7 +437,6 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                         league_code, season, kickoff.isoformat(), home, away, api_key
                     )
                     api_usage = get_api_usage()
-                    warning_key = f"highlightly_limit_warning_{api_usage['requests_today'] // 1}_{api_usage['remaining_estimate']}"
                     if api_usage["rate_limited"]:
                         st.error("Highlightly has returned HTTP 429: its request limit has been reached.")
                     elif api_usage["remaining_estimate"] < 10:
