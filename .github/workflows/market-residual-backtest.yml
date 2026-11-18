@@ -1,0 +1,40 @@
+name: Market residual historical experiment
+
+on:
+  push:
+    branches: [development]
+    paths:
+      - "market_residual_backtest.py"
+      - "research/experimental_model.py"
+      - "hybrid_form_backtest.py"
+      - "data_manager.py"
+      - "football_value_model_v3.py"
+      - "advanced_model.py"
+      - ".github/workflows/market-residual-backtest.yml"
+
+jobs:
+  historical-backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out development
+        uses: actions/checkout@v4
+        with:
+          ref: development
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run chronological market-residual experiment
+        run: python -u market_residual_backtest.py
+      - name: Upload predictions, scores, uncertainty and calibration
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-residual-historical-results
+          path: output/market_residual_*.csv
+          if-no-files-found: warn
+          retention-days: 30
