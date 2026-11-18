@@ -54,8 +54,13 @@ class ProspectiveEvaluationTests(unittest.TestCase):
         self.assertIsNotNone(scored.iloc[0]["Recorded_market_p"])
 
     def test_bootstrap_is_reproducible(self):
-        scored = scored_rows(self.make_log())
+        log = self.make_log()
+        log.loc[1, "final_home_goals"] = 0
+        log.loc[1, "final_away_goals"] = 1
+        log.loc[1, "bookmaker_name"] = "Bet365"
+        scored = scored_rows(log)
         scored = scored.loc[scored.Elo_p.notna() & scored.Market_p.notna()]
+        self.assertEqual(len(scored), 2)
         a = paired_brier_bootstrap(scored, "Elo", "Market", iterations=500, seed=7)
         b = paired_brier_bootstrap(scored, "Elo", "Market", iterations=500, seed=7)
         self.assertEqual(a, b)
