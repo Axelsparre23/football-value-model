@@ -1,6 +1,7 @@
 name: Market residual historical experiment
 
 on:
+  workflow_dispatch:
   push:
     branches: [development]
     paths:
