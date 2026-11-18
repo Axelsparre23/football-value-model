@@ -26,6 +26,17 @@ The dashboard does not change forecasts or tune the live model. It only scores c
 
 The current weaknesses, source comparison and prioritised experiment plan are documented in [`research/model_and_data_audit.md`](research/model_and_data_audit.md). The audit is intentionally separate from the production calculator.
 
+## Automated historical market-residual experiment
+
+Changes to the market-residual experiment and its data/model dependencies on `development` trigger the **Market residual historical experiment** GitHub Actions workflow. It runs the chronological 2021/22–2025/26 walk-forward study and uploads a 30-day artifact containing:
+
+- `market_residual_predictions.csv`: fixture-level market, residual-model and Elo probabilities on identical odds-covered matches.
+- `market_residual_summary.csv`: aggregate and league-season proper scoring rules and accuracy.
+- `market_residual_uncertainty.csv`: paired match-level bootstrap differences versus the market, with 95% intervals. Negative score differences favour the residual model.
+- `market_residual_calibration.csv`: classwise reliability bins for home, draw and away probabilities.
+
+The run prints source download failures and skips league-seasons that do not meet minimum sample and odds-coverage thresholds. It does not alter the live model or prospective forecast log. A workflow run must complete successfully and its output must be inspected before conclusions are drawn.
+
 ## Isolated experimental model
 
 `research/experimental_model.py` contains a separate market-anchored multinomial residual model. It starts from no-vig market probabilities and learns a regularised correction from pre-match Elo/form features. The existing `market_residual_backtest.py` uses this module in a walk-forward experiment: it selects regularisation on the prior season and evaluates the next untouched season. This candidate is not imported by `app.py` and cannot change the live predictions or the frozen prospective cohort.
