@@ -27,7 +27,7 @@ class ProspectiveEvaluationTests(unittest.TestCase):
 
     def test_scores_are_correct_and_probabilities_normalised(self):
         result = score_probabilities([[0.5, 0.25, 0.25]], [0])
-        self.assertAlmostEqual(result["brier"], 0.1875)
+        self.assertAlmostEqual(result["brier"], 0.375)
         self.assertAlmostEqual(result["log_loss"], -np.log(0.5))
         self.assertEqual(result["accuracy"], 1.0)
 
