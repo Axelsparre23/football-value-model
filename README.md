@@ -16,6 +16,12 @@ Choose a league, home team and away team, then press **Calculate match predictio
 - **Match context:** rest days are calculated from each team's latest prior result. A small capped xG adjustment is applied; this needs out-of-sample validation.
 - **Evaluation:** chronological training/validation/test comparison, with blend-weight selection and temperature calibration on validation data only. The final test block is held back from tuning.
 
+## Prospective study evaluation dashboard
+
+Open the **Prospective Evaluation** page from the Streamlit sidebar. It reads `research/prospective_50_match_log.csv` in read-only mode and reports Elo, Dixon–Coles and market Brier score, log loss, ranked probability score, accuracy, calibration and paired bootstrap uncertainty intervals once results are recorded.
+
+The dashboard does not change forecasts or tune the live model. It only scores completed fixtures with valid pre-match probabilities. The strict market comparison requires a named single bookmaker; synthetic best-price aggregates and unidentified operators are excluded. Closing prices are eligible only when their operator is recorded in `closing_bookmaker_name`. The original recorded prices remain in the log for audit.
+
 ## Player input format
 
 Enter one player per line:
