@@ -35,6 +35,13 @@ FEATURES = [
 ]
 MARKET_COLS = ["MarketHome", "MarketDraw", "MarketAway"]
 OUTCOME_MAP = {"Home": 0, "Draw": 1, "Away": 2}
+ABLATION_GROUPS = {
+    "Elo only": ["EloDiff"],
+    "Form only": ["GoalForDiff", "GoalAgainstDiff", "PointsPerMatchDiff"],
+    "Shots only": ["ShotsForDiff", "ShotsAgainstDiff", "ShotsOnTargetForDiff", "ShotsOnTargetAgainstDiff"],
+    "Elo + form": ["EloDiff", "GoalForDiff", "GoalAgainstDiff", "PointsPerMatchDiff"],
+    "All signals": FEATURES,
+}
 RIDGE_CANDIDATES = [0.01, 0.1, 1.0, 10.0, 100.0]
 
 
@@ -118,13 +125,13 @@ def calibration_summary(probabilities, outcomes, model_name, scope, bins=10):
     return rows
 
 
-def choose_ridge(train, validation):
+def choose_ridge(train, validation, feature_cols):
     """Choose regularisation on the immediately following season, never the test season."""
-    x_fit = train[FEATURES].to_numpy(dtype=float)
+    x_fit = train[feature_cols].to_numpy(dtype=float)
     y_fit = np.where(train.FTHG > train.FTAG, 0,
                      np.where(train.FTHG == train.FTAG, 1, 2))
     p_fit = train[MARKET_COLS].to_numpy(dtype=float)
-    x_val = validation[FEATURES].to_numpy(dtype=float)
+    x_val = validation[feature_cols].to_numpy(dtype=float)
     y_val = np.where(validation.FTHG > validation.FTAG, 0,
                      np.where(validation.FTHG == validation.FTAG, 1, 2))
     p_val = validation[MARKET_COLS].to_numpy(dtype=float)
@@ -178,6 +185,7 @@ def main():
     data = data.sort_values(["Date", "League", "HomeTeam", "AwayTeam"]).reset_index(drop=True)
 
     all_predictions = []
+    all_ablation_predictions = []
     for code, league_name in LEAGUES.items():
         league = data[data.League == code].copy()
         if league.empty:
@@ -211,7 +219,7 @@ def main():
                       f"test={len(test_market)})", flush=True)
                 continue
 
-            selected_ridge, validation_logloss = choose_ridge(fit_market, validation_market)
+            selected_ridge, validation_logloss = choose_ridge(fit_market, validation_market, FEATURES)
             x_train = train_market[FEATURES].to_numpy(dtype=float)
             y_train = np.where(train_market.FTHG > train_market.FTAG, 0,
                                np.where(train_market.FTHG == train_market.FTAG, 1, 2))
@@ -220,7 +228,40 @@ def main():
 
             x_test = test_market[FEATURES].to_numpy(dtype=float)
             market_test = test_market[MARKET_COLS].to_numpy(dtype=float)
+            y_test = np.where(test_market.FTHG > test_market.FTAG, 0,
+                              np.where(test_market.FTHG == test_market.FTAG, 1, 2))
             residual_p = predict_residual_model(model, x_test, market_test)
+
+            # Feature ablation: each candidate selects ridge on the prior validation
+            # season, then is refit on both prior seasons before touching the test season.
+            for group_name, feature_cols in ABLATION_GROUPS.items():
+                candidate_ridge, candidate_validation_loss = choose_ridge(
+                    fit_market, validation_market, feature_cols
+                )
+                candidate_model = fit_residual_model(
+                    train_market[feature_cols].to_numpy(dtype=float),
+                    market_train, y_train, candidate_ridge
+                )
+                candidate_p = predict_residual_model(
+                    candidate_model, test_market[feature_cols].to_numpy(dtype=float), market_test
+                )
+                for j, (_, candidate_match) in enumerate(test_market.iterrows()):
+                    all_ablation_predictions.append({
+                        "Date": pd.Timestamp(candidate_match.Date).date().isoformat(),
+                        "League": code, "LeagueName": league_name, "Season": str(year),
+                        "HomeTeam": str(candidate_match.HomeTeam),
+                        "AwayTeam": str(candidate_match.AwayTeam),
+                        "Actual": ["Home", "Draw", "Away"][int(y_test[j])],
+                        "FeatureGroup": group_name,
+                        "MarketHome": float(market_test[j, 0]),
+                        "MarketDraw": float(market_test[j, 1]),
+                        "MarketAway": float(market_test[j, 2]),
+                        "PredHome": float(candidate_p[j, 0]),
+                        "PredDraw": float(candidate_p[j, 1]),
+                        "PredAway": float(candidate_p[j, 2]),
+                        "SelectedRidge": float(candidate_ridge),
+                        "ValidationLogLoss": float(candidate_validation_loss),
+                    })
 
             for i, (_, match) in enumerate(test_market.iterrows()):
                 actual = 0 if match.FTHG > match.FTAG else (1 if match.FTHG == match.FTAG else 2)
@@ -327,6 +368,57 @@ def main():
     print(f"Saved {summary_path}")
     print(f"Saved {uncertainty_path}")
     print(f"Saved {calibration_path}")
+    # Save a paired, identical-fixture feature-ablation report against the market.
+    ablation = pd.DataFrame(all_ablation_predictions)
+    if not ablation.empty:
+        ablation_pred_path = OUTPUT / "market_residual_ablation_predictions.csv"
+        ablation_summary_path = OUTPUT / "market_residual_ablation_summary.csv"
+        ablation_uncertainty_path = OUTPUT / "market_residual_ablation_uncertainty.csv"
+        ablation.to_csv(ablation_pred_path, index=False)
+        ablation_summaries = []
+        ablation_uncertainty = []
+        for group_name, group in [("All seasons", ablation)] + [
+            (f"{league} {season}", part)
+            for (league, season), part in ablation.groupby(["LeagueName", "Season"], sort=True)
+        ]:
+            actual = group.Actual.map(OUTCOME_MAP).to_numpy()
+            market_p = group[["MarketHome", "MarketDraw", "MarketAway"]].to_numpy()
+            for feature_name, candidate in group.groupby("FeatureGroup", sort=False):
+                candidate_p = candidate[["PredHome", "PredDraw", "PredAway"]].to_numpy()
+                # Grouping preserves row order; verify fixture alignment before paired scoring.
+                keys = ["Date", "League", "HomeTeam", "AwayTeam", "Actual"]
+                market_rows = group[group.FeatureGroup == feature_name]
+                if not market_rows[keys].reset_index(drop=True).equals(candidate[keys].reset_index(drop=True)):
+                    raise RuntimeError("Ablation fixture alignment check failed.")
+                market_baseline = candidate[["MarketHome", "MarketDraw", "MarketAway"]].to_numpy()
+                candidate_actual = candidate.Actual.map(OUTCOME_MAP).to_numpy()
+                score = metrics(candidate_p, candidate_actual)
+                ablation_summaries.append({
+                    "Scope": group_name, "FeatureGroup": feature_name, **score,
+                    "SelectedRidgeMean": float(candidate.SelectedRidge.mean()),
+                })
+                comparison = paired_bootstrap_vs_market(
+                    candidate_p, market_baseline, candidate_actual,
+                    n_boot=2000, seed=42 + len(group_name) + len(feature_name)
+                )
+                ablation_uncertainty.append({
+                    "Scope": group_name, "FeatureGroup": feature_name, **comparison
+                })
+        pd.DataFrame(ablation_summaries).to_csv(ablation_summary_path, index=False)
+        pd.DataFrame(ablation_uncertainty).to_csv(ablation_uncertainty_path, index=False)
+        print("\\n=== FEATURE ABLATION: BRIER / LOGLOSS / DELTA VS MARKET ===", flush=True)
+        overall = pd.DataFrame(ablation_summaries)
+        for _, row in overall[overall.Scope == "All seasons"].iterrows():
+            delta = next(
+                item["Brier_delta_vs_market"] for item in ablation_uncertainty
+                if item["Scope"] == "All seasons" and item["FeatureGroup"] == row.FeatureGroup
+            )
+            print(f"{row.FeatureGroup:16s} N={row.N:5d} Brier={row.Brier:.4f} "
+                  f"LogLoss={row.LogLoss:.4f} Brier delta={delta:+.4f}", flush=True)
+        print(f"Saved {ablation_pred_path}")
+        print(f"Saved {ablation_summary_path}")
+        print(f"Saved {ablation_uncertainty_path}")
+
     print("Research only: the live calculator has not been changed.", flush=True)
 
 
