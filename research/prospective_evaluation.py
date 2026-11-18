@@ -30,6 +30,15 @@ def _known_single_bookmaker(value):
     return not any(token in source for token in rejected)
 
 
+def _has_provenance(source, timestamp):
+    source_text = str(source or "").strip().casefold()
+    time_text = str(timestamp or "").strip().casefold()
+    return (
+        bool(source_text) and source_text not in {"nan", "none", "unknown"}
+        and bool(time_text) and time_text not in {"nan", "none", "unknown"}
+    )
+
+
 def load_log(path: str | Path) -> pd.DataFrame:
     """Load the immutable forecast log; caller controls when/if outcomes are appended."""
     frame = pd.read_csv(path)
@@ -74,10 +83,20 @@ def scored_rows(log: pd.DataFrame) -> pd.DataFrame:
             item[f"{name}_p"] = _probabilities(row, columns)
         close = _probabilities(row, MARKET_CLOSE)
         opened = _probabilities(row, MARKET_OPEN)
-        close_source = row.get("closing_bookmaker_name", "")
-        open_source = row.get("bookmaker_name", "")
-        close_valid = close is not None and _known_single_bookmaker(close_source)
-        open_valid = opened is not None and _known_single_bookmaker(open_source)
+        close_operator = row.get("closing_bookmaker_name", "")
+        open_operator = row.get("bookmaker_name", "")
+        close_valid = (
+            close is not None
+            and _known_single_bookmaker(close_operator)
+            and _has_provenance(row.get("closing_odds_source", ""),
+                                row.get("closing_odds_timestamp_utc", ""))
+        )
+        open_valid = (
+            opened is not None
+            and _known_single_bookmaker(open_operator)
+            and _has_provenance(row.get("odds_source", ""),
+                                row.get("odds_timestamp_utc", ""))
+        )
         item["Recorded_market_p"] = close if close is not None else opened
         if close_valid:
             item["Market_p"] = close
