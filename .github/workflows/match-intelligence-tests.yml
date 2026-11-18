@@ -19,6 +19,6 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
       - name: Compile application and model modules
-        run: python -m py_compile app.py model_research.py advanced_model.py match_intelligence.py backtest_2025.py chronological_market_test.py multi_season_draw_backtest.py draw_calibration_backtest.py league_elo_optimisation.py market_calibration_backtest.py seasonal_elo_backtest.py attack_defence_backtest.py hybrid_form_backtest.py market_residual_backtest.py
+        run: python -m py_compile app.py pages/1_Prospective_Evaluation.py research/prospective_evaluation.py model_research.py advanced_model.py match_intelligence.py backtest_2025.py chronological_market_test.py multi_season_draw_backtest.py draw_calibration_backtest.py league_elo_optimisation.py market_calibration_backtest.py seasonal_elo_backtest.py attack_defence_backtest.py hybrid_form_backtest.py market_residual_backtest.py
       - name: Run match intelligence tests
         run: python -m unittest discover -s tests -v
