@@ -12,13 +12,12 @@ Run: python market_residual_backtest.py
 from pathlib import Path
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize
-from scipy.special import softmax
 
 from data_manager import download_data, LEAGUES
 from advanced_model import elo_probabilities
 from football_value_model_v3 import odds_of, devig
 from hybrid_form_backtest import build_pre_match_features
+from research.experimental_model import fit_residual_model, predict_residual_model
 
 OUTPUT = Path("output")
 YEARS = range(2021, 2026)
@@ -55,47 +54,6 @@ def metrics(probabilities, outcomes):
     }
 
 
-def fit_residual_model(x, market_p, y, ridge):
-    """Fit logits = log(market probability) + learned correction."""
-    x = np.asarray(x, dtype=float)
-    market_p = np.clip(np.asarray(market_p, dtype=float), 1e-7, 1.0)
-    market_p /= market_p.sum(axis=1, keepdims=True)
-    y = np.asarray(y, dtype=int)
-
-    means = np.nanmean(x, axis=0)
-    means = np.where(np.isfinite(means), means, 0.0)
-    x = np.where(np.isfinite(x), x, means)
-    scales = np.std(x, axis=0)
-    scales = np.where(scales < 1e-8, 1.0, scales)
-    z = np.clip((x - means) / scales, -6.0, 6.0)
-
-    # Center the offset so numerical magnitudes remain stable.
-    offset = np.log(market_p)
-    offset -= offset.mean(axis=1, keepdims=True)
-    design = np.column_stack([np.ones(len(z)), z])
-    n_features = design.shape[1]
-
-    def objective(flat):
-        weights = flat.reshape(3, n_features)
-        logits = offset + design @ weights.T
-        log_norm = np.logaddexp.reduce(logits, axis=1)
-        loss = np.mean(log_norm - logits[np.arange(len(y)), y])
-        penalty = ridge * np.sum(weights[:, 1:] ** 2) / 2.0
-        probs = softmax(logits, axis=1)
-        grad = ((probs - np.eye(3)[y]).T @ design) / len(y)
-        grad[:, 1:] += ridge * weights[:, 1:]
-        return float(loss + penalty), grad.ravel()
-
-    result = minimize(
-        objective, np.zeros(3 * n_features), jac=True, method="L-BFGS-B",
-        options={"maxiter": 1000, "ftol": 1e-10},
-    )
-    if not result.success and not np.isfinite(result.fun):
-        raise RuntimeError(f"Residual model fit failed: {result.message}")
-    return {"weights": result.x.reshape(3, n_features), "means": means,
-            "scales": scales}
-
-
 def choose_ridge(train, validation):
     """Choose regularisation on the immediately following season, never the test season."""
     x_fit = train[FEATURES].to_numpy(dtype=float)
@@ -114,18 +72,6 @@ def choose_ridge(train, validation):
         scores.append((float(loss), float(ridge)))
     scores.sort()
     return scores[0][1], scores[0][0]
-
-
-def predict_residual_model(model, x, market_p):
-    x = np.asarray(x, dtype=float)
-    x = np.where(np.isfinite(x), x, model["means"])
-    z = np.clip((x - model["means"]) / model["scales"], -6.0, 6.0)
-    design = np.column_stack([np.ones(len(z)), z])
-    p = np.clip(np.asarray(market_p, dtype=float), 1e-7, 1.0)
-    p /= p.sum(axis=1, keepdims=True)
-    offset = np.log(p)
-    offset -= offset.mean(axis=1, keepdims=True)
-    return softmax(offset + design @ model["weights"].T, axis=1)
 
 
 def season_bounds(code, year):
