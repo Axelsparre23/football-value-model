@@ -11,7 +11,7 @@ class ProspectiveEvaluationTests(unittest.TestCase):
             {"match_id": 1, "kickoff_local": "2026-11-20", "home_team": "A", "away_team": "B",
              "elo_home_pct": 50, "elo_draw_pct": 25, "elo_away_pct": 25,
              "dc_home_pct": 45, "dc_draw_pct": 30, "dc_away_pct": 25,
-             "market_home_novig_pct": 48, "market_draw_novig_pct": 27, "market_away_novig_pct": 25,
+             "market_home_novig_pct": 48, "market_draw_novig_pct": 27, "market_away_novig_pct": 25, "bookmaker_name": "Bet365",
              "final_home_goals": 2, "final_away_goals": 0, "actual_outcome": ""},
             {"match_id": 2, "kickoff_local": "2026-11-21", "home_team": "C", "away_team": "D",
              "elo_home_pct": 30, "elo_draw_pct": 30, "elo_away_pct": 40,
@@ -35,6 +35,7 @@ class ProspectiveEvaluationTests(unittest.TestCase):
         log = self.make_log()
         log.loc[0, ["closing_market_home_novig_pct", "closing_market_draw_novig_pct",
                     "closing_market_away_novig_pct"]] = [40, 30, 30]
+        log.loc[0, "closing_bookmaker_name"] = "Bet365"
         scored = scored_rows(log)
         self.assertEqual(scored.iloc[0].market_snapshot, "closing")
         self.assertTrue(np.allclose(scored.iloc[0].Market_p, [0.4, 0.3, 0.3]))
@@ -44,6 +45,13 @@ class ProspectiveEvaluationTests(unittest.TestCase):
         log.loc[0, ["elo_home_pct", "elo_draw_pct", "elo_away_pct"]] = [90, 20, 10]
         scored = scored_rows(log)
         self.assertIsNone(scored.iloc[0]["Elo_p"])
+
+    def test_aggregated_best_prices_are_not_used_as_strict_market_benchmark(self):
+        log = self.make_log()
+        log.loc[0, "bookmaker_name"] = "Aggregated best prices across 20 bookmakers"
+        scored = scored_rows(log)
+        self.assertIsNone(scored.iloc[0]["Market_p"])
+        self.assertIsNotNone(scored.iloc[0]["Recorded_market_p"])
 
     def test_bootstrap_is_reproducible(self):
         scored = scored_rows(self.make_log())
