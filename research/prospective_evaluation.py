@@ -20,6 +20,16 @@ MARKET_CLOSE = ("closing_market_home_novig_pct", "closing_market_draw_novig_pct"
                 "closing_market_away_novig_pct")
 
 
+def _known_single_bookmaker(value):
+    """Reject synthetic best-price aggregates and unidentified operators."""
+    source = str(value or "").strip().casefold()
+    if not source or source in {"nan", "none", "unknown"}:
+        return False
+    rejected = ("aggregat", "best price", "best odds", "source/operator not recorded",
+                "operator not recorded", "not recorded")
+    return not any(token in source for token in rejected)
+
+
 def load_log(path: str | Path) -> pd.DataFrame:
     """Load the immutable forecast log; caller controls when/if outcomes are appended."""
     frame = pd.read_csv(path)
@@ -64,9 +74,24 @@ def scored_rows(log: pd.DataFrame) -> pd.DataFrame:
             item[f"{name}_p"] = _probabilities(row, columns)
         close = _probabilities(row, MARKET_CLOSE)
         opened = _probabilities(row, MARKET_OPEN)
-        item["Market_p"] = close if close is not None else opened
-        item["market_snapshot"] = "closing" if close is not None else ("pre-match" if opened is not None else "unavailable")
-        if any(item[f"{name}_p"] is not None for name in MODEL_COLUMNS) or item["Market_p"] is not None:
+        close_source = row.get("closing_bookmaker_name", "")
+        open_source = row.get("bookmaker_name", "")
+        close_valid = close is not None and _known_single_bookmaker(close_source)
+        open_valid = opened is not None and _known_single_bookmaker(open_source)
+        item["Recorded_market_p"] = close if close is not None else opened
+        if close_valid:
+            item["Market_p"] = close
+            item["market_snapshot"] = "closing"
+            item["market_source_status"] = "verified single operator name recorded"
+        elif open_valid:
+            item["Market_p"] = opened
+            item["market_snapshot"] = "pre-match"
+            item["market_source_status"] = "single operator name recorded; not closing"
+        else:
+            item["Market_p"] = None
+            item["market_snapshot"] = "unverified / aggregated / unavailable"
+            item["market_source_status"] = "excluded from strict market comparison"
+        if any(item[f"{name}_p"] is not None for name in MODEL_COLUMNS) or item["Market_p"] is not None or item["Recorded_market_p"] is not None:
             rows.append(item)
     return pd.DataFrame(rows)
 
