@@ -60,6 +60,8 @@ class ProspectiveEvaluationTests(unittest.TestCase):
         log.loc[1, "final_home_goals"] = 0
         log.loc[1, "final_away_goals"] = 1
         log.loc[1, "bookmaker_name"] = "Bet365"
+        log.loc[1, "odds_source"] = "Bet365 match odds page"
+        log.loc[1, "odds_timestamp_utc"] = "2026-11-20T12:00:00Z"
         scored = scored_rows(log)
         scored = scored.loc[scored.Elo_p.notna() & scored.Market_p.notna()]
         self.assertEqual(len(scored), 2)
