@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from difflib import SequenceMatcher
 import os
 import re
+import threading
 import unicodedata
 from typing import Any
 
@@ -26,6 +27,55 @@ LEAGUE_NAMES = {
     "SWE": "Allsvenskan",
 }
 REQUEST_TIMEOUT = 15
+DAILY_REQUEST_BUDGET = 100
+_USAGE_LOCK = threading.Lock()
+_USAGE = {"date": datetime.now(timezone.utc).date().isoformat(),
+          "requests": 0, "rate_limited": False, "provider_remaining": None}
+
+
+def _record_api_request() -> None:
+    today = datetime.now(timezone.utc).date().isoformat()
+    with _USAGE_LOCK:
+        if _USAGE["date"] != today:
+            _USAGE.update(date=today, requests=0, rate_limited=False,
+                          provider_remaining=None)
+        _USAGE["requests"] += 1
+
+
+def _record_api_response(response) -> None:
+    with _USAGE_LOCK:
+        if response.status_code == 429:
+            _USAGE["rate_limited"] = True
+        for header in ("x-ratelimit-remaining", "x-rate-limit-remaining",
+                       "x-requests-remaining"):
+            value = response.headers.get(header)
+            if value is not None:
+                try:
+                    _USAGE["provider_remaining"] = max(0, int(value))
+                    break
+                except (TypeError, ValueError):
+                    pass
+
+
+def get_api_usage() -> dict[str, Any]:
+    """Return an in-process estimate of today's Highlightly request usage."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    with _USAGE_LOCK:
+        if _USAGE["date"] != today:
+            _USAGE.update(date=today, requests=0, rate_limited=False,
+                          provider_remaining=None)
+        local_remaining = max(0, DAILY_REQUEST_BUDGET - _USAGE["requests"])
+        provider_remaining = _USAGE["provider_remaining"]
+        remaining = (min(local_remaining, provider_remaining)
+                     if provider_remaining is not None else local_remaining)
+        if _USAGE["rate_limited"]:
+            remaining = 0
+        return {
+            "requests_today": _USAGE["requests"],
+            "remaining_estimate": remaining,
+            "rate_limited": _USAGE["rate_limited"],
+            "tracking_note": "App-instance estimate; provider headers are used when available.",
+        }
 
 
 class HighlightlyError(RuntimeError):
@@ -49,11 +99,13 @@ class HighlightlyClient:
     def _get(self, endpoint: str, params: dict[str, Any] | None = None) -> Any:
         if not self.configured:
             raise HighlightlyError("HIGHLIGHTLY_API_KEY is not configured.")
+        _record_api_request()
         response = self.session.get(
             f"{BASE_URL}/{endpoint.lstrip('/')}",
             params=params or {},
             timeout=self.timeout,
         )
+        _record_api_response(response)
         response.raise_for_status()
         payload = response.json()
         if isinstance(payload, dict) and payload.get("error"):
