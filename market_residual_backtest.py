@@ -43,6 +43,7 @@ ABLATION_GROUPS = {
     "All signals": FEATURES,
 }
 RIDGE_CANDIDATES = [0.01, 0.1, 1.0, 10.0, 100.0]
+NO_CORRECTION = -1.0  # exact market-only fallback selected on validation data
 
 
 def metrics(probabilities, outcomes):
@@ -135,14 +136,29 @@ def choose_ridge(train, validation, feature_cols):
     y_val = np.where(validation.FTHG > validation.FTAG, 0,
                      np.where(validation.FTHG == validation.FTAG, 1, 2))
     p_val = validation[MARKET_COLS].to_numpy(dtype=float)
-    scores = []
+    # Include the unchanged market as a candidate. Never force a learned
+    # correction when it loses to the market on the validation season.
+    market_loss = -np.mean(np.log(np.clip(p_val[np.arange(len(y_val)), y_val], 1e-9, 1.0)))
+    scores = [(float(market_loss), NO_CORRECTION)]
     for ridge in RIDGE_CANDIDATES:
         candidate = fit_residual_model(x_fit, p_fit, y_fit, ridge)
         probabilities = predict_residual_model(candidate, x_val, p_val)
         loss = -np.mean(np.log(np.clip(probabilities[np.arange(len(y_val)), y_val], 1e-9, 1.0)))
         scores.append((float(loss), float(ridge)))
-    scores.sort()
+    scores.sort(key=lambda item: (item[0], item[1]))
     return scores[0][1], scores[0][0]
+
+
+def fit_selected_candidate(features, market_probabilities, outcomes, ridge):
+    if ridge == NO_CORRECTION:
+        return None
+    return fit_residual_model(features, market_probabilities, outcomes, ridge)
+
+
+def predict_selected_candidate(model, features, market_probabilities):
+    if model is None:
+        return np.asarray(market_probabilities, dtype=float).copy()
+    return predict_residual_model(model, features, market_probabilities)
 
 
 def season_bounds(code, year):
@@ -224,13 +240,13 @@ def main():
             y_train = np.where(train_market.FTHG > train_market.FTAG, 0,
                                np.where(train_market.FTHG == train_market.FTAG, 1, 2))
             market_train = train_market[MARKET_COLS].to_numpy(dtype=float)
-            model = fit_residual_model(x_train, market_train, y_train, selected_ridge)
+            model = fit_selected_candidate(x_train, market_train, y_train, selected_ridge)
 
             x_test = test_market[FEATURES].to_numpy(dtype=float)
             market_test = test_market[MARKET_COLS].to_numpy(dtype=float)
             y_test = np.where(test_market.FTHG > test_market.FTAG, 0,
                               np.where(test_market.FTHG == test_market.FTAG, 1, 2))
-            residual_p = predict_residual_model(model, x_test, market_test)
+            residual_p = predict_selected_candidate(model, x_test, market_test)
 
             # Feature ablation: each candidate selects ridge on the prior validation
             # season, then is refit on both prior seasons before touching the test season.
@@ -238,11 +254,11 @@ def main():
                 candidate_ridge, candidate_validation_loss = choose_ridge(
                     fit_market, validation_market, feature_cols
                 )
-                candidate_model = fit_residual_model(
+                candidate_model = fit_selected_candidate(
                     train_market[feature_cols].to_numpy(dtype=float),
                     market_train, y_train, candidate_ridge
                 )
-                candidate_p = predict_residual_model(
+                candidate_p = predict_selected_candidate(
                     candidate_model, test_market[feature_cols].to_numpy(dtype=float), market_test
                 )
                 for j, (_, candidate_match) in enumerate(test_market.iterrows()):
@@ -288,7 +304,8 @@ def main():
                 })
             print(f"  {year}: train odds coverage={len(train_market)}/{len(train)}, "
                   f"test odds coverage={len(test_market)}/{len(test)} "
-                  f"({len(test_market) / max(1, len(test)):.1%}); ridge={selected_ridge:g}; "
+                  f"({len(test_market) / max(1, len(test)):.1%}); "
+                  f"selection={'market-only' if selected_ridge == NO_CORRECTION else 'ridge=' + format(selected_ridge, 'g')}; "
                   f"validation logloss={validation_logloss:.4f}", flush=True)
 
     predictions = pd.DataFrame(all_predictions)
