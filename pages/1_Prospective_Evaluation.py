@@ -29,8 +29,11 @@ b.metric("Results scored", completed)
 c.metric("Awaiting results", max(0, total - completed))
 
 st.subheader("Scoring rules")
-st.write("Brier, log loss and ranked probability score (RPS) are proper scoring rules; lower is better. Accuracy is the share of correct top-probability outcomes; higher is better. Market comparison uses closing no-vig probabilities when recorded, otherwise the original pre-match market snapshot.")
-st.caption("No odds are treated as guaranteed executable prices. The market benchmark is statistical only.")
+st.write("Brier, log loss and ranked probability score (RPS) are proper scoring rules; lower is better. Accuracy is the share of correct top-probability outcomes; higher is better. Strict market comparison requires a named single bookmaker. It uses closing no-vig probabilities only when the closing operator is recorded; otherwise it may use a named pre-match snapshot.")
+st.caption("Synthetic best-price aggregates and unidentified operators are excluded from the strict market comparison because their 1X2 prices may not come from one bookmaker. Their recorded probabilities remain visible for audit, but are not treated as a clean market benchmark.")
+valid_market = int(scored["Market_p"].notna().sum()) if "Market_p" in scored else 0
+recorded_market = int(scored["Recorded_market_p"].notna().sum()) if "Recorded_market_p" in scored else 0
+st.caption(f"Market data coverage: {valid_market} strict single-operator snapshots; {recorded_market - valid_market} recorded snapshots excluded from strict comparison.")
 
 metrics = metric_table(scored)
 st.subheader("Model comparison")
@@ -70,7 +73,8 @@ else:
 if completed:
     st.subheader("Recorded outcomes and data quality")
     view_cols = [c for c in ["match_id", "competition", "kickoff_local", "home_team", "away_team",
-                             "final_home_goals", "final_away_goals", "actual_outcome", "market_snapshot"] if c in scored]
+                             "final_home_goals", "final_away_goals", "actual_outcome", "market_snapshot",
+                             "market_source_status", "closing_bookmaker_name", "bookmaker_name"] if c in scored]
     st.dataframe(scored[view_cols], hide_index=True, use_container_width=True)
 
 st.subheader("Study integrity")
