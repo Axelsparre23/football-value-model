@@ -54,6 +54,70 @@ def metrics(probabilities, outcomes):
     }
 
 
+def _per_match_losses(probabilities, outcomes):
+    p = np.clip(np.asarray(probabilities, dtype=float), 1e-9, 1.0)
+    p /= p.sum(axis=1, keepdims=True)
+    y = np.asarray(outcomes, dtype=int)
+    onehot = np.eye(3)[y]
+    cumulative_p = np.cumsum(p, axis=1)[:, :2]
+    cumulative_y = np.cumsum(onehot, axis=1)[:, :2]
+    return {
+        "Brier": np.sum((p - onehot) ** 2, axis=1),
+        "LogLoss": -np.log(p[np.arange(len(y)), y]),
+        "RPS": np.sum((cumulative_p - cumulative_y) ** 2, axis=1) / 2.0,
+    }
+
+
+def paired_bootstrap_vs_market(model_probabilities, market_probabilities, outcomes,
+                               n_boot=2000, seed=42):
+    """Paired match-level bootstrap; negative deltas favour the tested model."""
+    model_losses = _per_match_losses(model_probabilities, outcomes)
+    market_losses = _per_match_losses(market_probabilities, outcomes)
+    rng = np.random.default_rng(seed)
+    n = len(outcomes)
+    result = {}
+    for metric_name in ("Brier", "LogLoss", "RPS"):
+        differences = model_losses[metric_name] - market_losses[metric_name]
+        sampled = rng.integers(0, n, size=(n_boot, n))
+        means = differences[sampled].mean(axis=1)
+        result[f"{metric_name}_delta_vs_market"] = float(differences.mean())
+        result[f"{metric_name}_ci95_low"] = float(np.quantile(means, 0.025))
+        result[f"{metric_name}_ci95_high"] = float(np.quantile(means, 0.975))
+    return result
+
+
+def calibration_summary(probabilities, outcomes, model_name, scope, bins=10):
+    """Classwise equal-width reliability bins and a simple weighted ECE."""
+    p = np.asarray(probabilities, dtype=float)
+    y = np.asarray(outcomes, dtype=int)
+    rows = []
+    for class_index, class_name in enumerate(("Home", "Draw", "Away")):
+        confidence = p[:, class_index]
+        observed = (y == class_index).astype(float)
+        edges = np.linspace(0.0, 1.0, bins + 1)
+        ece = 0.0
+        for bin_index in range(bins):
+            mask = ((confidence >= edges[bin_index]) &
+                    ((confidence < edges[bin_index + 1]) if bin_index < bins - 1
+                     else (confidence <= edges[bin_index + 1])))
+            count = int(mask.sum())
+            if count == 0:
+                continue
+            mean_probability = float(confidence[mask].mean())
+            observed_frequency = float(observed[mask].mean())
+            ece += count / len(y) * abs(mean_probability - observed_frequency)
+            rows.append({
+                "Scope": scope, "Model": model_name, "Outcome": class_name,
+                "BinLow": float(edges[bin_index]), "BinHigh": float(edges[bin_index + 1]),
+                "N": count, "MeanPredicted": mean_probability,
+                "ObservedFrequency": observed_frequency,
+            })
+        for row in rows:
+            if row["Scope"] == scope and row["Model"] == model_name and row["Outcome"] == class_name:
+                row["ClassECE"] = float(ece)
+    return rows
+
+
 def choose_ridge(train, validation):
     """Choose regularisation on the immediately following season, never the test season."""
     x_fit = train[FEATURES].to_numpy(dtype=float)
@@ -100,6 +164,13 @@ def main():
     print("Loading historical results and closing odds...", flush=True)
     data = download_data(Path("data/cache"), first_start_year=2010,
                          leagues=tuple(LEAGUES), refresh_current=True)
+    failures = data.attrs.get("download_failures", [])
+    if failures:
+        print(f"WARNING: {len(failures)} data-source download/read issues:", flush=True)
+        for failure in failures:
+            print(f"  - {failure}", flush=True)
+    else:
+        print("Data-source download check: no reported failures.", flush=True)
     data["Date"] = pd.to_datetime(data["Date"], errors="coerce")
     for col in ("FTHG", "FTAG"):
         data[col] = pd.to_numeric(data[col], errors="coerce")
@@ -189,6 +260,8 @@ def main():
     elo_cols = ["EloHome", "EloDraw", "EloAway"]
     print("\n=== AGGREGATE WALK-FORWARD RESULTS: IDENTICAL FIXTURES ===", flush=True)
     summaries = []
+    uncertainty_rows = []
+    calibration_rows = []
     for name, cols in [
         ("No-vig closing market", market_cols),
         ("Market + learned Elo/form residual", residual_cols),
@@ -196,6 +269,17 @@ def main():
     ]:
         result = metrics(predictions[cols].to_numpy(), y)
         summaries.append({"Scope": "All odds-covered matches", "Model": name, **result})
+        if name != "No-vig closing market":
+            comparison = paired_bootstrap_vs_market(
+                predictions[cols].to_numpy(), predictions[market_cols].to_numpy(), y
+            )
+            uncertainty_rows.append({"Scope": "All odds-covered matches", "Model": name, **comparison})
+            print(f"  vs market: Brier delta={comparison['Brier_delta_vs_market']:+.4f} "
+                  f"(95% CI {comparison['Brier_ci95_low']:+.4f} to {comparison['Brier_ci95_high']:+.4f})",
+                  flush=True)
+        calibration_rows.extend(calibration_summary(
+            predictions[cols].to_numpy(), y, name, "All odds-covered matches"
+        ))
         print(f"{name:39s} N={result['N']:5d} Brier={result['Brier']:.4f} "
               f"LogLoss={result['LogLoss']:.4f} RPS={result['RPS']:.4f} "
               f"Accuracy={result['Accuracy']:.4f}", flush=True)
@@ -210,14 +294,30 @@ def main():
             result = metrics(group[cols].to_numpy(), actual)
             row.update({f"{name}_{k}": v for k, v in result.items()})
         summaries.append(row)
+        for name, cols in [("Residual", residual_cols), ("Elo", elo_cols)]:
+            comparison = paired_bootstrap_vs_market(
+                group[cols].to_numpy(), group[market_cols].to_numpy(), actual,
+                n_boot=2000, seed=42 + int(season) + len(league_name)
+            )
+            uncertainty_rows.append({"Scope": f"{league_name} {season}", "Model": name, **comparison})
+        for name, cols in [("Market", market_cols), ("Residual", residual_cols), ("Elo", elo_cols)]:
+            calibration_rows.extend(calibration_summary(
+                group[cols].to_numpy(), actual, name, f"{league_name} {season}"
+            ))
         print(f"{league_name:16s} {season}: "
               f"market={row['Market_Brier']:.4f} "
               f"residual={row['Residual_Brier']:.4f} "
               f"Elo={row['Elo_Brier']:.4f} N={len(group)}", flush=True)
 
+    uncertainty_path = OUTPUT / "market_residual_uncertainty.csv"
+    calibration_path = OUTPUT / "market_residual_calibration.csv"
     pd.DataFrame(summaries).to_csv(summary_path, index=False)
+    pd.DataFrame(uncertainty_rows).to_csv(uncertainty_path, index=False)
+    pd.DataFrame(calibration_rows).to_csv(calibration_path, index=False)
     print(f"\nSaved {pred_path}")
     print(f"Saved {summary_path}")
+    print(f"Saved {uncertainty_path}")
+    print(f"Saved {calibration_path}")
     print("Research only: the live calculator has not been changed.", flush=True)
 
 
