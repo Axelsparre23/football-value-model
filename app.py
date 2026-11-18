@@ -14,7 +14,7 @@ from advanced_model import elo_history, elo_probabilities, team_profile, rest_da
 from model_research import chronological_ensemble_evaluation
 from match_intelligence import (
     HighlightlyClient, unavailable_result,
-    extract_1x2_odds, compare_odds_snapshots,
+    extract_1x2_odds, compare_odds_snapshots, get_api_usage,
 )
 
 st.set_page_config(page_title="Match Analysis", page_icon=":soccer:", layout="wide")
@@ -47,6 +47,19 @@ hr { border-color:var(--line); }
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="match-hero"><div class="match-kicker">Match intelligence · Research edition</div><h1 style="margin:.25rem 0 0">Match analysis</h1><div class="match-sub">Probability estimates, team context and model diagnostics across six leagues.</div></div>', unsafe_allow_html=True)
+
+@st.dialog("Highlightly API limit warning")
+def show_api_limit_warning(usage):
+    st.warning("Fewer than 10 estimated API requests remain today.")
+    st.write(
+        f"Estimated requests remaining: **{usage['remaining_estimate']}**. "
+        f"Requests recorded by this app today: **{usage['requests_today']}**."
+    )
+    st.caption(
+        "This is an app-instance estimate, not a guaranteed account-wide quota. "
+        "Other apps using the same API key and app restarts may affect the true balance."
+    )
+
 
 
 def get_highlightly_key():
@@ -423,6 +436,18 @@ if st.button("Calculate match prediction", type="primary", use_container_width=T
                     live = load_live_match_information(
                         league_code, season, kickoff.isoformat(), home, away, api_key
                     )
+                    api_usage = get_api_usage()
+                    warning_key = f"highlightly_limit_warning_{api_usage['requests_today'] // 1}_{api_usage['remaining_estimate']}"
+                    if api_usage["rate_limited"]:
+                        st.error("Highlightly has returned HTTP 429: its request limit has been reached.")
+                    elif api_usage["remaining_estimate"] < 10:
+                        st.warning(
+                            f"Highlightly API allowance is nearly exhausted: "
+                            f"approximately {api_usage['remaining_estimate']} requests remain."
+                        )
+                        if not st.session_state.get("highlightly_low_quota_popup_shown", False):
+                            show_api_limit_warning(api_usage)
+                            st.session_state["highlightly_low_quota_popup_shown"] = True
                 if live.get("overall_status") == "no_fixture":
                     st.warning(live.get("message", "No matching provider fixture was found."))
                 elif live.get("overall_status") == "not_configured":
